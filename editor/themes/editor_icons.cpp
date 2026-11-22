@@ -112,6 +112,7 @@ void editor_register_icons(const Ref<Theme> &p_theme, bool p_dark_theme, float p
 	saturation_exceptions.insert("Godot");
 	saturation_exceptions.insert("GodotFile");
 	saturation_exceptions.insert("Logo");
+	saturation_exceptions.insert("IPDEWelcome");
 	saturation_exceptions.insert("TitleBarLogo");
 
 	// Accent color conversion map.

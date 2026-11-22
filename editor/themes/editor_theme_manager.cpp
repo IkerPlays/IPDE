@@ -297,7 +297,7 @@ EditorThemeManager::ThemeConfiguration EditorThemeManager::_create_theme_config(
 		Color system_accent_color = display_server->get_accent_color();
 
 		if (follow_system_theme) {
-			String dark_theme = "Default";
+			String dark_theme = "IPDE";
 			String light_theme = "Light";
 
 			config.preset = light_theme; // Assume light theme if we can't detect system theme attributes.
@@ -357,9 +357,15 @@ EditorThemeManager::ThemeConfiguration EditorThemeManager::_create_theme_config(
 				preset_accent_color = Color(0.15, 0.55, 0.82);
 				preset_base_color = Color(0.89, 0.86, 0.79);
 				preset_contrast = light_contrast;
-			} else { // Default
+			} else if (config.preset == "Default") {
+				// Godot's default colors.
 				preset_accent_color = Color(0.337, 0.62, 1.0);
 				preset_base_color = Color(0.161, 0.161, 0.161);
+			} else { // IPDE
+				// Deep navy base and indigo accent, from the IPDE logo.
+				preset_accent_color = Color(0.49, 0.56, 1.0);
+				preset_base_color = Color(0.106, 0.114, 0.18);
+				preset_contrast = 0.32;
 			}
 
 			config.accent_color = preset_accent_color;

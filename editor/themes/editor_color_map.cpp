@@ -171,6 +171,7 @@ void EditorColorMap::create() {
 	add_conversion_exception("EditorBoneHandle");
 	add_conversion_exception("Editor3DHandle");
 	add_conversion_exception("Godot");
+	add_conversion_exception("IPDEWelcome");
 	add_conversion_exception("Sky");
 	add_conversion_exception("EditorControlAnchor");
 	add_conversion_exception("DefaultProjectIcon");
