@@ -23227,3 +23227,12 @@ msgstr "basado en Godot Engine"
 
 msgid "not available for this platform"
 msgstr "no disponible para esta plataforma"
+
+msgid "Repository \"%s\" not found. If it is private, set a GitHub token in Editor Settings > IPDE > Updates."
+msgstr "No se encontró el repositorio \"%s\". Si es privado, configura un token de GitHub en Configuración del Editor > IPDE > Updates."
+
+msgid "Repository \"%s\" not found, or the GitHub token can't access it."
+msgstr "No se encontró el repositorio \"%s\" o el token de GitHub no tiene acceso."
+
+msgid "The GitHub token is invalid or has expired."
+msgstr "El token de GitHub no es válido o ha caducado."

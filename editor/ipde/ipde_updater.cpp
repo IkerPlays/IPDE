@@ -140,6 +140,27 @@ String IPDEUpdater::_get_repository() const {
 	return repo;
 }
 
+String IPDEUpdater::_get_token() const {
+	// Optional GitHub token (fine-grained, read-only) to access releases of a private repository.
+	// It is stored in the local editor settings of each machine, never in the IPDE binary.
+	if (EditorSettings::get_singleton() && EditorSettings::get_singleton()->has_setting("ipde/updates/github_token")) {
+		return String(EDITOR_GET("ipde/updates/github_token")).strip_edges();
+	}
+	return String();
+}
+
+Vector<String> IPDEUpdater::_get_api_headers(const String &p_accept) const {
+	Vector<String> headers;
+	headers.push_back("Accept: " + p_accept);
+	headers.push_back("User-Agent: IPDE-Updater/" IPDE_VERSION_NUMBER);
+	headers.push_back("X-GitHub-Api-Version: 2022-11-28");
+	const String token = _get_token();
+	if (!token.is_empty()) {
+		headers.push_back("Authorization: Bearer " + token);
+	}
+	return headers;
+}
+
 String IPDEUpdater::_get_config_path() const {
 	return EditorPaths::get_singleton()->get_config_dir().path_join("ipde_updater.cfg");
 }
@@ -174,9 +195,7 @@ void IPDEUpdater::_fetch_releases(bool p_automatic) {
 		refresh_button->set_disabled(true);
 	}
 
-	Vector<String> headers;
-	headers.push_back("Accept: application/vnd.github+json");
-	headers.push_back("User-Agent: IPDE-Updater/" IPDE_VERSION_NUMBER);
+	const Vector<String> headers = _get_api_headers("application/vnd.github+json");
 	String url = vformat("https://api.github.com/repos/%s/releases?per_page=100", _get_repository());
 	// For testing: point the updater to another GitHub-compatible releases endpoint.
 	if (OS::get_singleton()->has_environment("IPDE_UPDATER_API")) {
@@ -199,7 +218,15 @@ void IPDEUpdater::_releases_request_completed(int p_result, int p_response_code,
 		return;
 	}
 	if (p_response_code == 404) {
-		_set_status(vformat(TTR("Repository \"%s\" not found. It must be public for the updater to work."), _get_repository()), true);
+		if (_get_token().is_empty()) {
+			_set_status(vformat(TTR("Repository \"%s\" not found. If it is private, set a GitHub token in Editor Settings > IPDE > Updates."), _get_repository()), true);
+		} else {
+			_set_status(vformat(TTR("Repository \"%s\" not found, or the GitHub token can't access it."), _get_repository()), true);
+		}
+		return;
+	}
+	if (p_response_code == 401) {
+		_set_status(TTR("The GitHub token is invalid or has expired."), true);
 		return;
 	}
 	if (p_response_code == 403 || p_response_code == 429) {
@@ -263,6 +290,7 @@ void IPDEUpdater::_releases_request_completed(int p_result, int p_response_code,
 			Asset a;
 			a.name = ad.get("name", "");
 			a.url = ad.get("browser_download_url", "");
+			a.api_url = ad.get("url", "");
 			a.size = int64_t(ad.get("size", 0));
 			r.assets.push_back(a);
 		}
@@ -571,10 +599,20 @@ void IPDEUpdater::_start_install(int p_release) {
 	}
 
 	download_request->set_download_file(download_path);
-	Vector<String> headers;
-	headers.push_back("Accept: application/octet-stream");
-	headers.push_back("User-Agent: IPDE-Updater/" IPDE_VERSION_NUMBER);
-	Error err = download_request->request(asset->url, headers);
+	following_redirect = false;
+	Error err;
+	if (!_get_token().is_empty() && !asset->api_url.is_empty()) {
+		// Private repository: download through the API with the token. GitHub answers with a
+		// redirect to a signed URL, which must be requested without the token (see _download_completed).
+		download_request->set_max_redirects(0);
+		err = download_request->request(asset->api_url, _get_api_headers("application/octet-stream"));
+	} else {
+		download_request->set_max_redirects(8);
+		Vector<String> headers;
+		headers.push_back("Accept: application/octet-stream");
+		headers.push_back("User-Agent: IPDE-Updater/" IPDE_VERSION_NUMBER);
+		err = download_request->request(asset->url, headers);
+	}
 	if (err != OK) {
 		installing_release = -1;
 		_show_error(vformat(TTR("Couldn't start the download (error %d)."), err));
@@ -590,6 +628,24 @@ void IPDEUpdater::_start_install(int p_release) {
 }
 
 void IPDEUpdater::_download_completed(int p_result, int p_response_code, const PackedStringArray &p_headers, const PackedByteArray &p_body) {
+	if (p_result == HTTPRequest::RESULT_REDIRECT_LIMIT_REACHED && !following_redirect) {
+		String location;
+		for (const String &h : p_headers) {
+			if (h.to_lower().begins_with("location:")) {
+				location = h.substr(h.find_char(':') + 1).strip_edges();
+			}
+		}
+		if (!location.is_empty()) {
+			following_redirect = true;
+			download_request->set_max_redirects(8);
+			Vector<String> headers;
+			headers.push_back("User-Agent: IPDE-Updater/" IPDE_VERSION_NUMBER);
+			if (download_request->request(location, headers) == OK) {
+				return; // Keep downloading.
+			}
+		}
+	}
+	following_redirect = false;
 	set_process(false);
 	download_progress->hide();
 	refresh_button->set_disabled(false);

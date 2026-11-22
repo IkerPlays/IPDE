@@ -61,6 +61,7 @@ public:
 	struct Asset {
 		String name;
 		String url;
+		String api_url;
 		int64_t size = 0;
 	};
 
@@ -123,6 +124,9 @@ private:
 	static String _get_platform_asset_suffix();
 	static bool _parse_version(const String &p_tag, int &r_major, int &r_minor, int &r_patch);
 	String _get_repository() const;
+	String _get_token() const;
+	Vector<String> _get_api_headers(const String &p_accept) const;
+	bool following_redirect = false;
 	String _get_config_path() const;
 	Variant _get_config_value(const String &p_key, const Variant &p_default) const;
 	void _set_config_value(const String &p_key, const Variant &p_value);

@@ -29,7 +29,20 @@ Las versiones de IPDE se publican en
 - La descarga, la instalación y el reinicio son automáticos en Windows, macOS y Linux.
   En Android se descarga el APK y se abre el instalador del sistema; en la web basta con
   recargar el editor.
-- Se puede configurar en **Ajustes del Editor → IPDE → Updates**.
+- Se puede configurar en **Configuración del Editor → IPDE → Updates**.
+
+#### Repositorio privado
+
+Si el repositorio es privado, cada instalación necesita un token de GitHub para ver las
+releases. El token se guarda solo en la configuración local de cada máquina, nunca dentro
+del ejecutable de IPDE:
+
+1. GitHub → Settings → Developer settings → Fine-grained tokens → *Generate new token*.
+2. *Repository access*: **Only select repositories** → `IkerPlays/IPDE`.
+3. *Permissions → Repository permissions → Contents*: **Read-only**.
+4. En IPDE: **Configuración del Editor → IPDE → Updates → Github Token** y pega el token.
+
+Quien tenga el token puede leer el código del repositorio: no lo compartas.
 
 ## Compilar desde el código
 
@@ -49,6 +62,13 @@ En GitHub: **Actions → IPDE Release → Run workflow**, indica la versión (`X
 canal (`stable` o `devbuild`). El flujo compila el editor para Linux, Windows, macOS
 y Android, crea la release `IPDE v.X.Y.Z` con los binarios y, si es stable, crea la
 rama `stable/vX.Y.Z`.
+
+### Firma de Android
+
+Para que cada APK nuevo se instale encima del anterior, todos deben firmarse con la misma
+clave. Configura estos secrets en **Settings → Secrets and variables → Actions**:
+`IPDE_ANDROID_KEYSTORE_BASE64`, `IPDE_ANDROID_KEYSTORE_ALIAS` e
+`IPDE_ANDROID_KEYSTORE_PASSWORD`. Sin ellos se usa una clave temporal.
 
 ## Licencia y créditos
 

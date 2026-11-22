@@ -1327,11 +1327,14 @@
 		<member name="ipde/updates/check_on_startup" type="bool" setter="" getter="">
 			If [code]true[/code], IPDE checks GitHub Releases for a newer stable version when the project manager or the editor starts, and asks whether to update.
 		</member>
+		<member name="ipde/updates/github_token" type="String" setter="" getter="">
+			Optional GitHub token used by the updater to read the releases of a private repository. Use a fine-grained token with read-only access to the repository's contents. It is stored only in this machine's editor settings.
+		</member>
 		<member name="ipde/updates/notify_devbuilds" type="bool" setter="" getter="">
 			If [code]true[/code], the startup update check also offers newer devbuilds, not only stable releases.
 		</member>
 		<member name="ipde/updates/repository" type="String" setter="" getter="">
-			The GitHub repository ([code]owner/name[/code]) where IPDE releases are published. The repository must be public.
+			The GitHub repository ([code]owner/name[/code]) where IPDE releases are published. If it is private, set [member ipde/updates/github_token].
 		</member>
 		<member name="network/connection/check_for_updates" type="int" setter="" getter="">
 			Specifies how the engine should check for updates.

@@ -1171,6 +1171,7 @@ void EditorSettings::_load_defaults(Ref<ConfigFile> p_extra_config) {
 	EDITOR_SETTING_BASIC(Variant::BOOL, PROPERTY_HINT_NONE, "ipde/updates/check_on_startup", true, "")
 	EDITOR_SETTING_BASIC(Variant::BOOL, PROPERTY_HINT_NONE, "ipde/updates/notify_devbuilds", false, "")
 	EDITOR_SETTING(Variant::STRING, PROPERTY_HINT_NONE, "ipde/updates/repository", IPDE_GITHUB_REPOSITORY, "")
+	EDITOR_SETTING_BASIC(Variant::STRING, PROPERTY_HINT_PASSWORD, "ipde/updates/github_token", "", "")
 
 	// HTTP Proxy
 	_initial_set("network/http_proxy/host", "");
