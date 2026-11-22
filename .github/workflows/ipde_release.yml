@@ -1,0 +1,382 @@
+name: 🚀 IPDE Release
+# Builds the IPDE editor for every platform and publishes it on GitHub Releases
+# as "IPDE v.X.Y.Z" (stable or devbuild). Stable releases also get a
+# "stable/vX.Y.Z" branch. The in-app updater reads these releases.
+#
+# Asset names (the updater depends on them):
+#   IPDE_vX.Y.Z_linux_x86_64.zip      -> IPDE.x86_64
+#   IPDE_vX.Y.Z_linux_arm64.zip       -> IPDE.arm64 (optional)
+#   IPDE_vX.Y.Z_windows_x86_64.zip    -> IPDE.exe, IPDE_console.exe
+#   IPDE_vX.Y.Z_macos_universal.zip   -> IPDE.app
+#   IPDE_vX.Y.Z_android_editor.apk
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "IPDE version (X.Y.Z)"
+        required: true
+        type: string
+      channel:
+        description: "Release channel"
+        required: true
+        default: devbuild
+        type: choice
+        options: [devbuild, stable]
+      notes:
+        description: "Release notes (optional, GitHub also adds the list of changes)"
+        required: false
+        type: string
+      android:
+        description: "Build the Android editor"
+        type: boolean
+        default: true
+      linux_arm64:
+        description: "Build Linux arm64 (requires arm64 runners)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: ipde-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  IPDE_VERSION: ${{ inputs.version }}
+  IPDE_CHANNEL: ${{ inputs.channel }}
+  BUILD_NAME: ipde
+  PYTHONIOENCODING: utf8
+  SCONS_FLAGS: >-
+    target=editor
+    debug_symbols=no
+    redirect_build_objects=no
+
+jobs:
+  prepare:
+    name: 📋 Prepare
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.info.outputs.tag }}
+      title: ${{ steps.info.outputs.title }}
+      base: ${{ steps.info.outputs.base }}
+    steps:
+      - name: Validate version
+        id: info
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${IPDE_VERSION#v}"
+          VERSION="${VERSION#.}"
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Invalid version '$IPDE_VERSION', expected X.Y.Z"
+            exit 1
+          fi
+          TAG="v${VERSION}-${IPDE_CHANNEL}"
+          if gh api "repos/${{ github.repository }}/git/ref/tags/${TAG}" >/dev/null 2>&1; then
+            echo "::error::Tag ${TAG} already exists."
+            exit 1
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "title=IPDE v.${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "base=IPDE_v${VERSION}" >> "$GITHUB_OUTPUT"
+
+  linux:
+    name: 🐧 Linux ${{ matrix.arch }}
+    needs: prepare
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.linux_arm64 && '[{"arch":"x86_64","runner":"ubuntu-24.04"},{"arch":"arm64","runner":"ubuntu-24.04-arm"}]' || '[{"arch":"x86_64","runner":"ubuntu-24.04"}]') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Setup dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwayland-bin zip
+
+      - name: Restore build cache
+        uses: ./.github/actions/godot-cache-restore
+        with:
+          cache-name: ipde-linux-${{ matrix.arch }}
+        continue-on-error: true
+
+      - name: Setup Python and SCons
+        uses: ./.github/actions/godot-deps
+
+      - name: Download pre-built AccessKit
+        id: accesskit-sdk
+        shell: sh
+        run: |
+          if python ./misc/scripts/install_accesskit.py; then
+            echo "ACCESSKIT_ENABLED=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "ACCESSKIT_ENABLED=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Compilation
+        run: |
+          scons platform=linuxbsd arch=${{ matrix.arch }} $SCONS_FLAGS accesskit=${{ steps.accesskit-sdk.outputs.ACCESSKIT_ENABLED }} "cache_path=${{ github.workspace }}/.scons_cache/"
+          ls -l bin/
+
+      - name: Save build cache
+        uses: ./.github/actions/godot-cache-save
+        with:
+          cache-name: ipde-linux-${{ matrix.arch }}
+        continue-on-error: true
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp bin/godot.linuxbsd.editor.${{ matrix.arch }} dist/IPDE.${{ matrix.arch }}
+          strip dist/IPDE.${{ matrix.arch }}
+          chmod +x dist/IPDE.${{ matrix.arch }}
+          dist/IPDE.${{ matrix.arch }} --version
+          cd dist && zip -9 ../${{ needs.prepare.outputs.base }}_linux_${{ matrix.arch }}.zip IPDE.${{ matrix.arch }}
+
+      - name: Upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-linux-${{ matrix.arch }}
+          path: ${{ needs.prepare.outputs.base }}_linux_${{ matrix.arch }}.zip
+          retention-days: 7
+
+  windows:
+    name: 🏁 Windows
+    needs: prepare
+    runs-on: windows-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Restore build cache
+        uses: ./.github/actions/godot-cache-restore
+        with:
+          cache-name: ipde-windows
+        continue-on-error: true
+
+      - name: Setup Python and SCons
+        uses: ./.github/actions/godot-deps
+
+      - name: Download SDKs (Direct3D 12, ANGLE, AccessKit)
+        id: sdks
+        shell: sh
+        run: |
+          if python ./misc/scripts/install_d3d12_sdk_windows.py; then echo "D3D12=yes" >> "$GITHUB_OUTPUT"; else echo "D3D12=no" >> "$GITHUB_OUTPUT"; fi
+          if python ./misc/scripts/install_angle.py; then echo "ANGLE=yes" >> "$GITHUB_OUTPUT"; else echo "ANGLE=no" >> "$GITHUB_OUTPUT"; fi
+          if python ./misc/scripts/install_accesskit.py; then echo "ACCESSKIT=yes" >> "$GITHUB_OUTPUT"; else echo "ACCESSKIT=no" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Compilation
+        shell: sh
+        run: |
+          scons platform=windows $SCONS_FLAGS d3d12=${{ steps.sdks.outputs.D3D12 }} angle=${{ steps.sdks.outputs.ANGLE }} accesskit=${{ steps.sdks.outputs.ACCESSKIT }} "cache_path=${{ github.workspace }}/.scons_cache/"
+          ls -l bin/
+
+      - name: Save build cache
+        uses: ./.github/actions/godot-cache-save
+        with:
+          cache-name: ipde-windows
+        continue-on-error: true
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item bin/godot.windows.editor.x86_64.exe dist/IPDE.exe
+          if (Test-Path bin/godot.windows.editor.x86_64.console.exe) { Copy-Item bin/godot.windows.editor.x86_64.console.exe dist/IPDE_console.exe }
+          Get-ChildItem bin -Filter *.dll | ForEach-Object { Copy-Item $_.FullName dist/ }
+          if (Test-Path dist/IPDE_console.exe) { ./dist/IPDE_console.exe --version }
+          Compress-Archive -Path dist/* -DestinationPath "${{ needs.prepare.outputs.base }}_windows_x86_64.zip" -CompressionLevel Optimal
+
+      - name: Upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-windows
+          path: ${{ needs.prepare.outputs.base }}_windows_x86_64.zip
+          retention-days: 7
+
+  macos:
+    name: 🍎 macOS
+    needs: prepare
+    runs-on: macos-26
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Restore build cache
+        uses: ./.github/actions/godot-cache-restore
+        with:
+          cache-name: ipde-macos
+        continue-on-error: true
+
+      - name: Setup Python and SCons
+        uses: ./.github/actions/godot-deps
+
+      - name: Download SDKs (Vulkan, ANGLE, AccessKit)
+        id: sdks
+        run: |
+          if sh misc/scripts/install_vulkan_sdk_macos.sh; then echo "VULKAN=yes" >> "$GITHUB_OUTPUT"; else echo "VULKAN=no" >> "$GITHUB_OUTPUT"; fi
+          if python3 ./misc/scripts/install_angle.py; then echo "ANGLE=yes" >> "$GITHUB_OUTPUT"; else echo "ANGLE=no" >> "$GITHUB_OUTPUT"; fi
+          if python3 ./misc/scripts/install_accesskit.py; then echo "ACCESSKIT=yes" >> "$GITHUB_OUTPUT"; else echo "ACCESSKIT=no" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Compilation (x86_64)
+        run: |
+          scons platform=macos arch=x86_64 $SCONS_FLAGS vulkan=${{ steps.sdks.outputs.VULKAN }} angle=${{ steps.sdks.outputs.ANGLE }} accesskit=${{ steps.sdks.outputs.ACCESSKIT }} metal=no "cache_path=${{ github.workspace }}/.scons_cache/"
+
+      - name: Compilation (arm64) and .app bundle
+        run: |
+          scons platform=macos arch=arm64 $SCONS_FLAGS vulkan=${{ steps.sdks.outputs.VULKAN }} angle=${{ steps.sdks.outputs.ANGLE }} accesskit=${{ steps.sdks.outputs.ACCESSKIT }} generate_bundle=yes "cache_path=${{ github.workspace }}/.scons_cache/"
+          ls -l bin/
+
+      - name: Save build cache
+        uses: ./.github/actions/godot-cache-save
+        with:
+          cache-name: ipde-macos
+        continue-on-error: true
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          APP=$(ls -d bin/*.app | head -n 1)
+          cp -R "$APP" dist/IPDE.app
+          chmod +x dist/IPDE.app/Contents/MacOS/*
+          codesign --force --deep -s - dist/IPDE.app
+          dist/IPDE.app/Contents/MacOS/IPDE --version || true
+          cd dist && zip -r -9 ../${{ needs.prepare.outputs.base }}_macos_universal.zip IPDE.app
+
+      - name: Upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-macos
+          path: ${{ needs.prepare.outputs.base }}_macos_universal.zip
+          retention-days: 7
+
+  android:
+    name: 🤖 Android
+    needs: prepare
+    if: inputs.android
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Restore build cache
+        uses: ./.github/actions/godot-cache-restore
+        with:
+          cache-name: ipde-android
+        continue-on-error: true
+
+      - name: Setup Python and SCons
+        uses: ./.github/actions/godot-deps
+
+      - name: Compilation
+        run: |
+          scons platform=android arch=arm64 $SCONS_FLAGS "cache_path=${{ github.workspace }}/.scons_cache/"
+
+      - name: Save build cache
+        uses: ./.github/actions/godot-cache-save
+        with:
+          cache-name: ipde-android
+        continue-on-error: true
+
+      - name: Setup signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.IPDE_ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_ALIAS: ${{ secrets.IPDE_ANDROID_KEYSTORE_ALIAS }}
+          KEYSTORE_PASSWORD: ${{ secrets.IPDE_ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/ipde.keystore"
+            echo "GODOT_ANDROID_SIGN_KEYSTORE=$RUNNER_TEMP/ipde.keystore" >> "$GITHUB_ENV"
+            echo "GODOT_ANDROID_KEYSTORE_ALIAS=$KEYSTORE_ALIAS" >> "$GITHUB_ENV"
+            echo "GODOT_ANDROID_SIGN_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          else
+            echo "::warning::No IPDE_ANDROID_KEYSTORE_* secrets: the APK is signed with a temporary debug key, so it can't update a previous install."
+          fi
+
+      - name: Generate editor APK
+        run: |
+          cd platform/android/java
+          ./gradlew generateGodotEditor
+          cd ../../..
+          ls -l bin/android_editor_builds/
+          APK=$(ls bin/android_editor_builds/*.apk | grep -v -e horizonos -e picoos | grep release | head -n 1)
+          [ -z "$APK" ] && APK=$(ls bin/android_editor_builds/*.apk | grep -v -e horizonos -e picoos | head -n 1)
+          cp "$APK" "${{ needs.prepare.outputs.base }}_android_editor.apk"
+
+      - name: Upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-android
+          path: ${{ needs.prepare.outputs.base }}_android_editor.apk
+          retention-days: 7
+
+  publish:
+    name: 📦 Publish release
+    needs: [prepare, linux, windows, macos, android]
+    if: ${{ always() && needs.prepare.result == 'success' && needs.linux.result == 'success' && needs.windows.result == 'success' && needs.macos.result == 'success' && needs.android.result != 'failure' && needs.android.result != 'cancelled' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download builds
+        uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: assets
+          merge-multiple: true
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          TITLE: ${{ needs.prepare.outputs.title }}
+          NOTES: ${{ inputs.notes }}
+        run: |
+          ls -l assets
+          if [ "$IPDE_CHANNEL" = "stable" ]; then
+            HEADER="**Stable** release of IPDE."
+            FLAGS="--latest"
+          else
+            HEADER="**DevBuild** (development build) of IPDE. It may be unstable."
+            FLAGS="--prerelease --latest=false"
+          fi
+          printf '%s\n\n%s\n' "$HEADER" "$NOTES" > notes.md
+          gh release create "$TAG" assets/* \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --title "$TITLE" \
+            --notes-file notes.md \
+            --generate-notes \
+            $FLAGS
+
+      - name: Create stable branch
+        if: inputs.channel == 'stable'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${IPDE_VERSION#v}"
+          VERSION="${VERSION#.}"
+          gh api "repos/${{ github.repository }}/git/refs" \
+            -f ref="refs/heads/stable/v${VERSION}" \
+            -f sha="${{ github.sha }}"
