@@ -52,7 +52,7 @@ def generate_bundle(target, source, env):
                     line = line.replace("$version", "{ipde_major}.{ipde_minor}.{ipde_patch}.{ipde_channel}".format(**version))
                     line = line.replace("$short_version", "{ipde_major}.{ipde_minor}.{ipde_patch}".format(**version))
                     if version["build"] != "official" and version["build"] != "steam":
-                        line = line.replace("com.ikerplays.ipde", "com.ikerplays.ipde." + version["build"])
+                        line = line.replace("com.ikersstudio.ipde", "com.ikersstudio.ipde." + version["build"])
                     fout.write(line)
 
         # Sign .app bundle.

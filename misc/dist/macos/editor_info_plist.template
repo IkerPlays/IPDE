@@ -15,7 +15,7 @@
 	<key>CFBundleIconName</key>
 	<string>GodotLG</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.ikerplays.ipde</string>
+	<string>com.ikersstudio.ipde</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundlePackageType</key>
@@ -33,7 +33,7 @@
 	<key>NSRequiresAquaSystemAppearance</key>
 	<false/>
 	<key>NSHumanReadableCopyright</key>
-	<string>IPDE. Based on Godot Engine © 2007-present Juan Linietsky, Ariel Manzur &amp; Godot Engine contributors</string>
+	<string>© IkersStudio. IPDE is based on Godot Engine © 2007-present Juan Linietsky, Ariel Manzur &amp; Godot Engine contributors</string>
 	<key>CFBundleSupportedPlatforms</key>
 	<array>
 		<string>MacOSX</string>
