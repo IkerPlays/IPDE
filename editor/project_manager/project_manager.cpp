@@ -68,6 +68,7 @@
 #include "scene/gui/panel_container.h"
 #include "scene/gui/rich_text_label.h"
 #include "scene/gui/separator.h"
+#include "scene/gui/texture_rect.h"
 #include "scene/main/scene_tree.h"
 #include "scene/main/window.h"
 #include "scene/theme/theme_db.h"
@@ -123,7 +124,7 @@ void ProjectManager::_notification(int p_what) {
 
 			const String line1 = TTR("You don't have any projects yet.");
 			const String line2 = TTR("Get started by creating a new one,\nimporting one that exists, or by downloading a project template from the Asset Store!");
-			empty_list_message->set_text(vformat("[center][b]%s[/b] %s[/center]", line1, line2));
+			empty_list_message->set_text(vformat("[center]%s\n%s[/center]", line1, line2));
 
 			_titlebar_resized();
 
@@ -276,6 +277,9 @@ void ProjectManager::_update_theme(bool p_skip_creation) {
 			loading_label->add_theme_font_override(SceneStringName(font), get_theme_font("bold", EditorStringName(EditorFonts)));
 			project_list_panel->add_theme_style_override(SceneStringName(panel), get_theme_stylebox("project_list", "ProjectManager"));
 
+			empty_list_logo->set_texture(get_editor_theme_icon("IPDEWelcome"));
+			empty_list_title->add_theme_font_override(SceneStringName(font), get_theme_font("bold", EditorStringName(EditorFonts)));
+			empty_list_title->add_theme_font_size_override(SceneStringName(font_size), get_theme_font_size("main_size", EditorStringName(EditorFonts)) * 2);
 			empty_list_create_project->set_button_icon(get_editor_theme_icon("Add"));
 			empty_list_import_project->set_button_icon(get_editor_theme_icon("Load"));
 			empty_list_open_assetlib->set_button_icon(get_editor_theme_icon("AssetStore"));
@@ -300,7 +304,6 @@ void ProjectManager::_update_theme(bool p_skip_creation) {
 			erase_btn->set_button_icon(get_editor_theme_icon("Remove"));
 			erase_missing_btn->set_button_icon(get_editor_theme_icon("Clear"));
 			create_tag_btn->set_button_icon(get_editor_theme_icon("Add"));
-			donate_btn->set_button_icon(get_editor_theme_icon("Heart"));
 
 			tag_error->add_theme_color_override(SceneStringName(font_color), get_theme_color("error_color", EditorStringName(Editor)));
 			tag_edit_error->add_theme_color_override(SceneStringName(font_color), get_theme_color("error_color", EditorStringName(Editor)));
@@ -697,7 +700,7 @@ void ProjectManager::_open_selected_projects_check_warnings() {
 
 	// Check if the config_version property was empty or 0.
 	if (config_version == 0) {
-		ask_update_label->set_text(vformat(TTR("The selected project \"%s\" does not specify its supported Godot version in its configuration file (\"project.godot\").\n\nProject path: %s\n\nIf you proceed with opening it, it will be converted to Godot's current configuration file format.\n\nWarning: You won't be able to open the project with previous versions of the engine anymore."), project.project_name, project.path));
+		ask_update_label->set_text(vformat(TTR("The selected project \"%s\" does not specify its supported engine version in its configuration file (\"project.godot\").\n\nProject path: %s\n\nIf you proceed with opening it, it will be converted to Godot's current configuration file format.\n\nWarning: You won't be able to open the project with previous versions of the engine anymore."), project.project_name, project.path));
 		ask_update_settings->popup_centered(popup_min_size);
 		return;
 	}
@@ -729,11 +732,11 @@ void ProjectManager::_open_selected_projects_check_warnings() {
 			const String &feature = unsupported_features[i];
 			if (feature == "Double Precision") {
 				ask_update_backup->show();
-				warning_message += TTR("Warning: This project uses double precision floats, but this version of\nGodot uses single precision floats. Opening this project may cause data loss.\n\n");
+				warning_message += TTR("Warning: This project uses double precision floats, but this version of\nIPDE uses single precision floats. Opening this project may cause data loss.\n\n");
 				unsupported_features.remove_at(i);
 				i--;
 			} else if (feature == "C#") {
-				warning_message += TTR("Warning: This project uses C#, but this build of Godot does not have\nthe Mono module. If you proceed you will not be able to use any C# scripts.\n\n");
+				warning_message += TTR("Warning: This project uses C#, but this build of IPDE does not have\nthe Mono module. If you proceed you will not be able to use any C# scripts.\n\n");
 				unsupported_features.remove_at(i);
 				i--;
 			} else if (ProjectList::project_feature_looks_like_version(feature)) {
@@ -743,14 +746,14 @@ void ProjectManager::_open_selected_projects_check_warnings() {
 					migration_guide_button->show();
 				}
 				version_convert_feature = feature;
-				warning_message += vformat(TTR("Warning: This project was last edited in Godot %s. Opening will change it to Godot %s.\n\n"), Variant(feature), Variant(GODOT_VERSION_BRANCH));
+				warning_message += vformat(TTR("Warning: This project was last edited with engine version %s. Opening will change it to engine version %s.\n\n"), Variant(feature), Variant(GODOT_VERSION_BRANCH));
 				unsupported_features.remove_at(i);
 				i--;
 			}
 		}
 		if (!unsupported_features.is_empty()) {
 			String unsupported_features_str = String(", ").join(unsupported_features);
-			warning_message += vformat(TTR("Warning: This project uses the following features not supported by this build of Godot:\n\n%s\n\n"), unsupported_features_str);
+			warning_message += vformat(TTR("Warning: This project uses the following features not supported by this build of IPDE:\n\n%s\n\n"), unsupported_features_str);
 		}
 		warning_message += TTR("Open anyway? Project will be modified.");
 		ask_update_label->set_horizontal_alignment(HORIZONTAL_ALIGNMENT_CENTER);
@@ -943,7 +946,7 @@ void ProjectManager::_open_recovery_mode_ask(bool manual) {
 	// Only show the initial crash preamble if this popup wasn't manually triggered.
 	if (!manual) {
 		recovery_mode_details +=
-				TTR("It looks like Godot crashed when opening this project the last time. If you're having problems editing this project, you can try to open it in Recovery Mode.") +
+				TTR("It looks like IPDE crashed when opening this project the last time. If you're having problems editing this project, you can try to open it in Recovery Mode.") +
 				String::utf8("\n\n");
 	}
 
@@ -1454,7 +1457,7 @@ void ProjectManager::_titlebar_resized() {
 }
 
 void ProjectManager::_open_donate_page() {
-	OS::get_singleton()->shell_open("https://fund.godotengine.org/?ref=project_manager");
+	OS::get_singleton()->shell_open("https://github.com/IkerPlays/IPDE");
 }
 
 // Object methods.
@@ -1582,7 +1585,7 @@ ProjectManager::ProjectManager() {
 
 		title_bar_logo = memnew(Button);
 		title_bar_logo->set_flat(true);
-		title_bar_logo->set_tooltip_text(TTR("About Godot"));
+		title_bar_logo->set_tooltip_text(TTR("About IPDE"));
 		left_hbox->add_child(title_bar_logo);
 		title_bar_logo->connect(SceneStringName(pressed), callable_mp(this, &ProjectManager::_show_about));
 
@@ -1748,6 +1751,17 @@ ProjectManager::ProjectManager() {
 				empty_list_placeholder->hide();
 				project_list_panel->add_child(empty_list_placeholder);
 
+				// IPDE welcome header.
+				empty_list_logo = memnew(TextureRect);
+				empty_list_logo->set_stretch_mode(TextureRect::STRETCH_KEEP_ASPECT_CENTERED);
+				empty_list_logo->set_h_size_flags(SIZE_SHRINK_CENTER);
+				empty_list_placeholder->add_child(empty_list_logo);
+
+				empty_list_title = memnew(Label);
+				empty_list_title->set_horizontal_alignment(HORIZONTAL_ALIGNMENT_CENTER);
+				empty_list_title->set_text(TTRC("Welcome to IPDE"));
+				empty_list_placeholder->add_child(empty_list_title);
+
 				empty_list_message = memnew(RichTextLabel);
 				empty_list_message->set_auto_translate_mode(AUTO_TRANSLATE_MODE_DISABLED);
 				empty_list_message->set_use_bbcode(true);
@@ -1864,10 +1878,6 @@ ProjectManager::ProjectManager() {
 			erase_missing_btn->connect(SceneStringName(pressed), callable_mp(this, &ProjectManager::_erase_missing_projects));
 			sidebar_buttons_containter->add_child(erase_missing_btn);
 
-			donate_btn = memnew(Button);
-			donate_btn->set_text(TTRC("Donate"));
-			donate_btn->connect(SceneStringName(pressed), callable_mp(this, &ProjectManager::_open_donate_page));
-			project_list_sidebar->add_child(donate_btn);
 		}
 	}
 

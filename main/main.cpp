@@ -385,15 +385,15 @@ void Main::print_header(bool p_rich) {
 	if (GODOT_VERSION_TIMESTAMP > 0) {
 		// Version timestamp available.
 		if (p_rich) {
-			Engine::get_singleton()->print_header_rich("\u001b[38;5;39m" + String(IPDE_VERSION_FULL_NAME) + "\u001b[0m (Godot v" + get_full_version_string() + ")" + " (" + Time::get_singleton()->get_datetime_string_from_unix_time(GODOT_VERSION_TIMESTAMP, true) + " UTC) - \u001b[4m" + String(GODOT_VERSION_WEBSITE));
+			Engine::get_singleton()->print_header_rich("\u001b[38;5;39m" + String(IPDE_VERSION_FULL_NAME) + "\u001b[0m" + " (" + Time::get_singleton()->get_datetime_string_from_unix_time(GODOT_VERSION_TIMESTAMP, true) + " UTC) - \u001b[4m" + String(GODOT_VERSION_WEBSITE));
 		} else {
-			Engine::get_singleton()->print_header(String(IPDE_VERSION_FULL_NAME) + " (Godot v" + get_full_version_string() + ")" + " (" + Time::get_singleton()->get_datetime_string_from_unix_time(GODOT_VERSION_TIMESTAMP, true) + " UTC) - " + String(GODOT_VERSION_WEBSITE));
+			Engine::get_singleton()->print_header(String(IPDE_VERSION_FULL_NAME) + " (" + Time::get_singleton()->get_datetime_string_from_unix_time(GODOT_VERSION_TIMESTAMP, true) + " UTC) - " + String(GODOT_VERSION_WEBSITE));
 		}
 	} else {
 		if (p_rich) {
-			Engine::get_singleton()->print_header_rich("\u001b[38;5;39m" + String(IPDE_VERSION_FULL_NAME) + "\u001b[0m (Godot v" + get_full_version_string() + ")" + " - \u001b[4m" + String(GODOT_VERSION_WEBSITE));
+			Engine::get_singleton()->print_header_rich("\u001b[38;5;39m" + String(IPDE_VERSION_FULL_NAME) + "\u001b[0m" + " - \u001b[4m" + String(GODOT_VERSION_WEBSITE));
 		} else {
-			Engine::get_singleton()->print_header(String(IPDE_VERSION_FULL_NAME) + " (Godot v" + get_full_version_string() + ")" + " - " + String(GODOT_VERSION_WEBSITE));
+			Engine::get_singleton()->print_header(String(IPDE_VERSION_FULL_NAME) + " - " + String(GODOT_VERSION_WEBSITE));
 		}
 	}
 }
@@ -473,7 +473,7 @@ void Main::print_help_option(const char *p_option, const char *p_description, CL
 void Main::print_help(const char *p_binary) {
 	print_header(true);
 	print_help_copyright("Free and open source software under the terms of the MIT license.");
-	print_help_copyright("(c) 2014-present Godot Engine contributors. (c) 2007-present Juan Linietsky, Ariel Manzur.");
+	print_help_copyright("(c) IkersStudio. See the License tab in the About dialog for license details.");
 
 	print_help_title("Usage");
 	OS::get_singleton()->print("  %s \u001b[96m[options] [path to \"project.godot\" file]\u001b[0m\n", p_binary);

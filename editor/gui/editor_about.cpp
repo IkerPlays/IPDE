@@ -56,12 +56,7 @@
 void EditorAbout::_notification(int p_what) {
 	switch (p_what) {
 		case NOTIFICATION_TRANSLATION_CHANGED: {
-			_about_text_label->set_text(
-					String("IPDE - ") + TTR("based on Godot Engine") + ".\n" +
-					String(U"© 2014-present ") + TTR("Godot Engine contributors") + ".\n" +
-					String(U"© 2007-2014 Juan Linietsky, Ariel Manzur.\n"));
-
-			_project_manager_label->set_text(TTR("Project Manager", "Job Title"));
+			_about_text_label->set_text(String(U"© IkersStudio.\n") + TTR("See the License tab for license details."));
 
 			for (ItemList *il : name_lists) {
 				for (int i = 0; i < il->get_item_count(); i++) {
@@ -251,44 +246,6 @@ EditorAbout::EditorAbout() {
 	tc->set_theme_type_variation("TabContainerOdd");
 	vbc->add_child(tc);
 
-	{
-		ScrollContainer *sc = memnew(ScrollContainer);
-		sc->set_name(TTRC("Authors"));
-		sc->set_v_size_flags(Control::SIZE_EXPAND);
-		tc->add_child(sc);
-
-		VBoxContainer *vb = memnew(VBoxContainer);
-		vb->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-		sc->add_child(vb);
-
-		_create_section(vb, TTRC("Project Founders"), AUTHORS_FOUNDERS, FLAG_SINGLE_COLUMN);
-		_create_section(vb, TTRC("Lead Developer"), AUTHORS_LEAD_DEVELOPERS);
-		// The section title will be updated in NOTIFICATION_TRANSLATION_CHANGED.
-		_project_manager_label = _create_section(vb, "", AUTHORS_PROJECT_MANAGERS, FLAG_EASTER_EGG);
-		_project_manager_label->set_auto_translate_mode(AUTO_TRANSLATE_MODE_DISABLED);
-		_create_section(vb, TTRC("Developers"), AUTHORS_DEVELOPERS);
-	}
-
-	{
-		ScrollContainer *sc = memnew(ScrollContainer);
-		sc->set_name(TTRC("Donors"));
-		sc->set_v_size_flags(Control::SIZE_EXPAND);
-		tc->add_child(sc);
-
-		VBoxContainer *vb = memnew(VBoxContainer);
-		vb->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-		sc->add_child(vb);
-
-		_create_section(vb, TTRC("Patrons"), DONORS_PATRONS, FLAG_ALLOW_WEBSITE | FLAG_SINGLE_COLUMN);
-		_create_section(vb, TTRC("Platinum Sponsors"), DONORS_SPONSORS_PLATINUM, FLAG_ALLOW_WEBSITE);
-		_create_section(vb, TTRC("Gold Sponsors"), DONORS_SPONSORS_GOLD, FLAG_ALLOW_WEBSITE);
-		_create_section(vb, TTRC("Silver Sponsors"), DONORS_SPONSORS_SILVER, FLAG_ALLOW_WEBSITE);
-		_create_section(vb, TTRC("Diamond Members"), DONORS_MEMBERS_DIAMOND, FLAG_ALLOW_WEBSITE);
-		_create_section(vb, TTRC("Titanium Members"), DONORS_MEMBERS_TITANIUM, FLAG_ALLOW_WEBSITE);
-		_create_section(vb, TTRC("Platinum Members"), DONORS_MEMBERS_PLATINUM, FLAG_ALLOW_WEBSITE);
-		_create_section(vb, TTRC("Gold Members"), DONORS_MEMBERS_GOLD, FLAG_ALLOW_WEBSITE);
-	}
-
 	// License.
 
 	license_text_label = memnew(RichTextLabel);
@@ -307,7 +264,7 @@ EditorAbout::EditorAbout() {
 	license_thirdparty->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 	tc->add_child(license_thirdparty);
 
-	Label *tpl_label = memnew(Label(TTRC("Godot Engine relies on a number of third-party free and open source libraries, all compatible with the terms of its MIT license. The following is an exhaustive list of all such third-party components with their respective copyright statements and license terms.")));
+	Label *tpl_label = memnew(Label(TTRC("IPDE relies on a number of third-party free and open source libraries, all compatible with the terms of its MIT license. The following is an exhaustive list of all such third-party components with their respective copyright statements and license terms.")));
 	tpl_label->set_focus_mode(Control::FOCUS_ACCESSIBILITY);
 	tpl_label->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 	tpl_label->set_autowrap_mode(TextServer::AUTOWRAP_WORD_SMART);

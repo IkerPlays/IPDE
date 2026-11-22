@@ -42,10 +42,10 @@ String _get_version_string(EditorVersionButton::VersionFormat p_format) {
 			return IPDE_VERSION_FULL_NAME;
 		} break;
 		case EditorVersionButton::FORMAT_WITH_BUILD: {
-			main = IPDE_VERSION_FULL_NAME " - Godot v" GODOT_VERSION_FULL_BUILD;
+			main = IPDE_VERSION_FULL_NAME;
 		} break;
 		case EditorVersionButton::FORMAT_WITH_NAME_AND_BUILD: {
-			main = IPDE_VERSION_FULL_NAME " - Godot v" GODOT_VERSION_FULL_BUILD;
+			main = IPDE_VERSION_FULL_NAME;
 		} break;
 		default: {
 			ERR_FAIL_V_MSG(GODOT_VERSION_FULL_NAME, "Unexpected format: " + itos(p_format));

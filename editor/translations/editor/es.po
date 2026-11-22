@@ -23236,3 +23236,72 @@ msgstr "No se encontró el repositorio \"%s\" o el token de GitHub no tiene acce
 
 msgid "The GitHub token is invalid or has expired."
 msgstr "El token de GitHub no es válido o ha caducado."
+
+msgid "You are about to create an IPDE project in a non-empty folder.\nThe entire contents of this folder will be imported as project resources!\n\nAre you sure you wish to continue?"
+msgstr "Estás a punto de crear un proyecto de IPDE en una carpeta que no está vacía.\n¡Todo el contenido de esta carpeta será importado como recursos del proyecto!\n\n¿Seguro que deseas continuar?"
+
+msgid "This project was last edited in a different engine version: "
+msgstr "Este proyecto fue editado por última vez en una versión diferente del motor: "
+
+msgid "Opening it will upgrade it to engine version %s.%s."
+msgstr "Al abrirlo se actualizará a la versión %s.%s del motor."
+
+msgid "Opening it will downgrade it to engine version %s.%s."
+msgstr "Al abrirlo se degradará a la versión %s.%s del motor."
+
+msgid "This project uses an unknown engine version."
+msgstr "Este proyecto utiliza una versión desconocida del motor."
+
+msgid "The selected project \"%s\" does not specify its supported engine version in its configuration file (\"project.godot\").\n\nProject path: %s\n\nIf you proceed with opening it, it will be converted to Godot's current configuration file format.\n\nWarning: You won't be able to open the project with previous versions of the engine anymore."
+msgstr "El proyecto seleccionado \"%s\" no especifica la versión del motor soportada en su archivo de configuración (\"project.godot\").\n\nRuta del proyecto: %s\n\nSi procedes a abrirlo, se convertirá al formato de fichero de configuración actual de Godot.\n\nAdvertencia: Ya no podrás abrir el proyecto con versiones anteriores del motor."
+
+msgid "Warning: This project uses double precision floats, but this version of\nIPDE uses single precision floats. Opening this project may cause data loss.\n\n"
+msgstr "Advertencia: este proyecto utiliza flotantes de doble precisión, pero esta versión de\nIPDE usa flotantes de precisión simple. Abrir este proyecto puede provocar la pérdida de datos.\n\n"
+
+msgid "Warning: This project uses C#, but this build of IPDE does not have\nthe Mono module. If you proceed you will not be able to use any C# scripts.\n\n"
+msgstr "Advertencia: este proyecto usa C#, pero esta compilación de IPDE no tiene\nel módulo Mono. Si continúas, no podrás utilizar ningún script de C#.\n\n"
+
+msgid "Warning: This project was last edited with engine version %s. Opening will change it to engine version %s.\n\n"
+msgstr "Advertencia: Este proyecto fue editado por última vez con la versión %s del motor. Al abrirlo se actualizará a la versión %s.\n\n"
+
+msgid "Warning: This project uses the following features not supported by this build of IPDE:\n\n%s\n\n"
+msgstr "Advertencia: este proyecto utiliza las siguientes características no soportadas por esta compilación de IPDE:\n\n%s\n\n"
+
+msgid "It looks like IPDE crashed when opening this project the last time. If you're having problems editing this project, you can try to open it in Recovery Mode."
+msgstr "Parece que IPDE se cerró inesperadamente al abrir este proyecto la última vez. Si tienes problemas para editar este proyecto, puedes intentar abrirlo en Modo de Recuperación."
+
+msgid "This release is only compatible with engine versions between %s and %s."
+msgstr "Esta versión solo es compatible con versiones del motor entre %s y %s."
+
+msgid "This release is only compatible with engine version %s and newer."
+msgstr "Esta versión solo es compatible con la versión %s del motor o posteriores."
+
+msgid "This release is only compatible with engine version %s and older."
+msgstr "Esta versión solo es compatible con la versión %s del motor o anteriores."
+
+msgid "Thank you for choosing IPDE!"
+msgstr "¡Gracias por elegir IPDE!"
+
+msgid "File '%s' is saved in a format that is newer than the formats supported by this version of IPDE, so it can't be opened."
+msgstr "El archivo '%s' está guardado en un formato más nuevo que los formatos soportados por esta versión de IPDE, por lo que no se puede abrir."
+
+msgid "About IPDE..."
+msgstr "Acerca de IPDE..."
+
+msgid "Files have been modified outside IPDE"
+msgstr "Los archivos han sido modificados fuera de IPDE"
+
+msgid "IPDE opened the project in Recovery Mode, which is a special mode that can help recover projects that crash the engine upon initialization. The following features have been temporarily disabled:"
+msgstr "IPDE abrió el proyecto en modo de recuperación, que es un modo especial que puede ayudar a recuperar proyectos que hacen que el motor se bloquee al inicializarse. Las siguientes características han sido deshabilitadas temporalmente:"
+
+msgid "%s - IPDE"
+msgstr "%s - IPDE"
+
+msgid "See the License tab for license details."
+msgstr "Consulta la pestaña Licencia para ver los detalles de la licencia."
+
+msgid "IPDE relies on a number of third-party free and open source libraries, all compatible with the terms of its MIT license. The following is an exhaustive list of all such third-party components with their respective copyright statements and license terms."
+msgstr "IPDE se basa en una serie de librerías libres y de código abierto de terceros, todas ellas compatibles con los términos de su licencia MIT. La siguiente es una lista exhaustiva de todos estos componentes de terceros con sus respectivas declaraciones de derechos de autor y términos de licencia."
+
+msgid "Welcome to IPDE"
+msgstr "Bienvenido a IPDE"

@@ -41,6 +41,8 @@ class EditorTitleBar;
 class HFlowContainer;
 class LineEdit;
 class LinkButton;
+class Label;
+class TextureRect;
 class MarginContainer;
 class OptionButton;
 class PanelContainer;
@@ -136,6 +138,8 @@ class ProjectManager : public Control {
 
 	void _show_quick_settings();
 	LinkButton *ipde_update_link = nullptr;
+	TextureRect *empty_list_logo = nullptr;
+	Label *empty_list_title = nullptr;
 	void _ipde_releases_updated(const String &p_newest);
 	void _restart_confirmed();
 
