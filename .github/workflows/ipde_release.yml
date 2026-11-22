@@ -47,6 +47,8 @@ env:
   IPDE_VERSION: ${{ inputs.version }}
   IPDE_CHANNEL: ${{ inputs.channel }}
   BUILD_NAME: ipde
+  # Built into the editor so the updater can read releases of this private repository.
+  IPDE_UPDATER_TOKEN: ${{ secrets.IPDE_UPDATER_TOKEN }}
   PYTHONIOENCODING: utf8
   SCONS_FLAGS: >-
     target=editor
@@ -77,6 +79,9 @@ jobs:
           if gh api "repos/${{ github.repository }}/git/ref/tags/${TAG}" >/dev/null 2>&1; then
             echo "::error::Tag ${TAG} already exists."
             exit 1
+          fi
+          if [ -z "$IPDE_UPDATER_TOKEN" ]; then
+            echo "::warning::IPDE_UPDATER_TOKEN secret is not set: the updater won't see releases while the repository is private."
           fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "title=IPDE v.${VERSION}" >> "$GITHUB_OUTPUT"

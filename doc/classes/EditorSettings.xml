@@ -1328,7 +1328,7 @@
 			If [code]true[/code], IPDE checks GitHub Releases for a newer stable version when the project manager or the editor starts, and asks whether to update.
 		</member>
 		<member name="ipde/updates/github_token" type="String" setter="" getter="">
-			Optional GitHub token used by the updater to read the releases of a private repository. Use a fine-grained token with read-only access to the repository's contents. It is stored only in this machine's editor settings.
+			GitHub token used by the updater to read the releases of a private repository. Use a fine-grained token with read-only access to the repository's contents. If empty, the token built into official builds is used.
 		</member>
 		<member name="ipde/updates/notify_devbuilds" type="bool" setter="" getter="">
 			If [code]true[/code], the startup update check also offers newer devbuilds, not only stable releases.

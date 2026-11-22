@@ -33,16 +33,18 @@ Las versiones de IPDE se publican en
 
 #### Repositorio privado
 
-Si el repositorio es privado, cada instalación necesita un token de GitHub para ver las
-releases. El token se guarda solo en la configuración local de cada máquina, nunca dentro
-del ejecutable de IPDE:
+Las builds oficiales llevan integrado un token de solo lectura para ver las releases del
+repositorio privado. Se inyecta al compilar desde el secret `IPDE_UPDATER_TOKEN` (nunca se
+guarda en el código):
 
 1. GitHub → Settings → Developer settings → Fine-grained tokens → *Generate new token*.
 2. *Repository access*: **Only select repositories** → `IkerPlays/IPDE`.
 3. *Permissions → Repository permissions → Contents*: **Read-only**.
-4. En IPDE: **Configuración del Editor → IPDE → Updates → Github Token** y pega el token.
+4. Guárdalo en **Settings → Secrets and variables → Actions** como `IPDE_UPDATER_TOKEN`.
 
-Quien tenga el token puede leer el código del repositorio: no lo compartas.
+El token va ofuscado dentro del ejecutable, pero alguien con conocimientos podría extraerlo
+y leer el código del repositorio. Si caduca o lo revocas, cualquiera puede poner uno nuevo en
+**Configuración del Editor → IPDE → Updates → Github Token**, que tiene prioridad.
 
 ## Compilar desde el código
 

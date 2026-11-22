@@ -30,6 +30,8 @@
 
 #include "ipde_updater.h"
 
+#include "editor/ipde/ipde_token.gen.h"
+
 #include "core/config/engine.h"
 #include "core/io/config_file.h"
 #include "core/io/dir_access.h"
@@ -141,12 +143,22 @@ String IPDEUpdater::_get_repository() const {
 }
 
 String IPDEUpdater::_get_token() const {
-	// Optional GitHub token (fine-grained, read-only) to access releases of a private repository.
-	// It is stored in the local editor settings of each machine, never in the IPDE binary.
+	// GitHub token (fine-grained, read-only) to access releases of a private repository.
+	// A token set in the editor settings takes precedence over the one built into official builds.
 	if (EditorSettings::get_singleton() && EditorSettings::get_singleton()->has_setting("ipde/updates/github_token")) {
-		return String(EDITOR_GET("ipde/updates/github_token")).strip_edges();
+		const String token = String(EDITOR_GET("ipde/updates/github_token")).strip_edges();
+		if (!token.is_empty()) {
+			return token;
+		}
 	}
-	return String();
+	static const char *key = "IkersStudio-IPDE-Updater";
+	const String obf = IPDE_UPDATER_TOKEN_OBF;
+	const int key_len = strlen(key);
+	Vector<uint8_t> token;
+	for (int i = 0; i + 1 < obf.length(); i += 2) {
+		token.push_back(uint8_t(obf.substr(i, 2).hex_to_int() ^ uint8_t(key[(i / 2) % key_len])));
+	}
+	return token.is_empty() ? String() : String::utf8((const char *)token.ptr(), token.size());
 }
 
 Vector<String> IPDEUpdater::_get_api_headers(const String &p_accept) const {
