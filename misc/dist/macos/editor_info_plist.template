@@ -5,15 +5,17 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>English</string>
 	<key>CFBundleExecutable</key>
-	<string>Godot</string>
+	<string>IPDE</string>
 	<key>CFBundleName</key>
-	<string>Godot</string>
+	<string>IPDE</string>
+	<key>CFBundleDisplayName</key>
+	<string>IPDE</string>
 	<key>CFBundleIconFile</key>
 	<string>GodotLG.icns</string>
 	<key>CFBundleIconName</key>
 	<string>GodotLG</string>
 	<key>CFBundleIdentifier</key>
-	<string>org.godotengine.godot</string>
+	<string>com.ikerplays.ipde</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundlePackageType</key>
@@ -31,7 +33,7 @@
 	<key>NSRequiresAquaSystemAppearance</key>
 	<false/>
 	<key>NSHumanReadableCopyright</key>
-	<string>© 2007-present Juan Linietsky, Ariel Manzur &amp; Godot Engine contributors</string>
+	<string>IPDE. Based on Godot Engine © 2007-present Juan Linietsky, Ariel Manzur &amp; Godot Engine contributors</string>
 	<key>CFBundleSupportedPlatforms</key>
 	<array>
 		<string>MacOSX</string>
@@ -84,7 +86,7 @@
 			<key>UTTypeReferenceURL</key>
 			<string></string>
 			<key>UTTypeDescription</key>
-			<string>Godot Engine scene</string>
+			<string>IPDE scene</string>
 			<key>UTTypeIconFile</key>
 			<string>Scene.icns</string>
 			<key>UTTypeConformsTo</key>
@@ -132,7 +134,7 @@
 			<key>UTTypeReferenceURL</key>
 			<string></string>
 			<key>UTTypeDescription</key>
-			<string>Godot Engine resource</string>
+			<string>IPDE resource</string>
 			<key>UTTypeIconFile</key>
 			<string>Resource.icns</string>
 			<key>UTTypeConformsTo</key>
@@ -156,7 +158,7 @@
 			<key>UTTypeReferenceURL</key>
 			<string></string>
 			<key>UTTypeDescription</key>
-			<string>Godot Engine shader</string>
+			<string>IPDE shader</string>
 			<key>UTTypeIconFile</key>
 			<string>Shader.icns</string>
 			<key>UTTypeConformsTo</key>
@@ -179,7 +181,7 @@
 			<key>UTTypeReferenceURL</key>
 			<string></string>
 			<key>UTTypeDescription</key>
-			<string>Godot Engine project</string>
+			<string>IPDE project</string>
 			<key>UTTypeIconFile</key>
 			<string>Project.icns</string>
 			<key>UTTypeConformsTo</key>

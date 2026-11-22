@@ -850,7 +850,7 @@ DisplayServerEnums::WindowID DisplayServerWayland::create_sub_window(DisplayServ
 	// can only know once we show it.
 	wd.rect = p_rect;
 
-	wd.title = "Godot";
+	wd.title = "IPDE";
 	wd.parent_id = p_transient_parent;
 	return id;
 }
@@ -2517,7 +2517,7 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Dis
 	wd.flags = p_flags;
 	wd.vsync_mode = p_vsync_mode;
 	wd.rect.size = p_resolution;
-	wd.title = "Godot";
+	wd.title = "IPDE";
 
 	if (!AccessibilityServer::get_singleton()->window_create(wd.id, nullptr)) {
 		if (OS::get_singleton()->is_stdout_verbose()) {

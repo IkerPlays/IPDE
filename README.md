@@ -1,76 +1,58 @@
-# Godot Engine
+# IPDE
 
 <p align="center">
-  <a href="https://godotengine.org">
-    <img src="misc/logo/logo_outlined.svg" width="400" alt="Godot Engine logo">
-  </a>
+  <img src="misc/logo/icon.png" width="160" alt="IPDE">
 </p>
 
-## 2D and 3D cross-platform game engine
+**IPDE** es un motor de videojuegos 2D y 3D multiplataforma, libre y de código abierto,
+basado en [Godot Engine](https://godotengine.org). Mantiene toda la potencia de Godot
+(editor visual, GDScript, C#, exportación a escritorio, móvil y web) y añade su propia
+identidad, su propio ciclo de versiones y un **actualizador integrado**.
 
-**[Godot Engine](https://godotengine.org) is a feature-packed, cross-platform
-game engine to create 2D and 3D games from a unified interface.** It provides a
-comprehensive set of [common tools](https://godotengine.org/features), so that
-users can focus on making games without having to reinvent the wheel. Games can
-be exported with one click to a number of platforms, including the major desktop
-platforms (Linux, macOS, Windows), mobile platforms (Android, iOS), as well as
-Web-based platforms and [consoles](https://godotengine.org/consoles).
+## Versiones
 
-## Free, open source and community-driven
+Las versiones de IPDE se publican en
+[GitHub Releases](https://github.com/IkerPlays/IPDE/releases) con el nombre
+**`IPDE v.X.Y.Z`** y pertenecen a uno de dos canales:
 
-Godot is completely free and open source under the very permissive [MIT license](https://godotengine.org/license).
-No strings attached, no royalties, nothing. The users' games are theirs, down
-to the last line of engine code. Godot's development is fully independent and
-community-driven, empowering users to help shape their engine to match their
-expectations. It is supported by the [Godot Foundation](https://godot.foundation/)
-not-for-profit.
+| Canal | Etiqueta Git | Descripción |
+|-------|--------------|-------------|
+| **Stable** | `vX.Y.Z-stable` | Versión estable. Cada stable tiene además su rama `stable/vX.Y.Z`. |
+| **DevBuild** | `vX.Y.Z-devbuild` | Compilación de desarrollo (marcada como *pre-release*). |
 
-Before being open sourced in [February 2014](https://github.com/godotengine/godot/commit/0b806ee0fc9097fa7bda7ac0109191c9c5e0a1ac),
-Godot had been developed by [Juan Linietsky](https://github.com/reduz) and
-[Ariel Manzur](https://github.com/punto-) for several years as an in-house
-engine, used to publish several work-for-hire titles.
+### Actualizador integrado
 
-![Screenshot of a 3D scene in the Godot Engine editor](https://raw.githubusercontent.com/godotengine/godot-design/master/screenshots/editor_tps_demo_1920x1080.jpg)
+- Al abrir IPDE (Project Manager o editor) se comprueba si hay una **stable** más nueva y
+  se pregunta si quieres actualizar (*Actualizar*, *Ahora no* u *Omitir esta versión*).
+- Desde **Ayuda → Versiones de IPDE…** (o el botón del Project Manager) puedes instalar
+  manualmente cualquier versión: stables, devbuilds, versiones anteriores, etc.
+- La descarga, la instalación y el reinicio son automáticos en Windows, macOS y Linux.
+  En Android se descarga el APK y se abre el instalador del sistema; en la web basta con
+  recargar el editor.
+- Se puede configurar en **Ajustes del Editor → IPDE → Updates**.
 
-## Getting the engine
+## Compilar desde el código
 
-### Binary downloads
+IPDE se compila igual que Godot (SCons):
 
-Official binaries for the Godot editor and the export templates can be found
-[on the Godot website](https://godotengine.org/download).
+```bash
+scons platform=linuxbsd target=editor
+```
 
-### Compiling from source
+Consulta la [documentación de compilación de Godot](https://docs.godotengine.org/en/latest/engine_details/development/compiling/index.html)
+para cada plataforma. La versión de IPDE está en [`version.py`](version.py)
+(`ipde_major`, `ipde_minor`, `ipde_patch`, `ipde_channel`).
 
-[See the official docs](https://docs.godotengine.org/en/latest/engine_details/development/compiling)
-for compilation instructions for every supported platform.
+## Publicar una versión
 
-## Community and contributing
+En GitHub: **Actions → IPDE Release → Run workflow**, indica la versión (`X.Y.Z`) y el
+canal (`stable` o `devbuild`). El flujo compila el editor para Linux, Windows, macOS
+y Android, crea la release `IPDE v.X.Y.Z` con los binarios y, si es stable, crea la
+rama `stable/vX.Y.Z`.
 
-Godot is not only an engine but an ever-growing community of users and engine
-developers. The main community channels are listed [on the homepage](https://godotengine.org/community).
+## Licencia y créditos
 
-The best way to get in touch with the core engine developers is to join the
-[Godot Contributors Chat](https://chat.godotengine.org).
-
-To get started contributing to the project, see the [contributing guide](CONTRIBUTING.md).
-This document also includes guidelines for reporting bugs.
-
-## Documentation and demos
-
-The official documentation is hosted on [Read the Docs](https://docs.godotengine.org).
-It is maintained by the Godot community in its own [GitHub repository](https://github.com/godotengine/godot-docs).
-
-The [class reference](https://docs.godotengine.org/en/latest/classes/)
-is also accessible from the Godot editor.
-
-We also maintain official demos in their own [GitHub repository](https://github.com/godotengine/godot-demo-projects)
-as well as the [Asset Store](https://store.godotengine.org/).
-
-There are also a number of other
-[learning resources](https://docs.godotengine.org/en/latest/community/tutorials.html)
-provided by the community, such as text and video tutorials, demos, etc.
-Consult the [community channels](https://godotengine.org/community)
-for more information.
-
-[![Code Triagers Badge](https://www.codetriage.com/godotengine/godot/badges/users.svg)](https://www.codetriage.com/godotengine/godot)
-[![Translate on Weblate](https://hosted.weblate.org/widgets/godot-engine/-/godot/svg-badge.svg)](https://hosted.weblate.org/engage/godot-engine/?utm_source=widget)
+IPDE se distribuye bajo la licencia MIT, igual que Godot Engine.
+Godot Engine © 2014-present Godot Engine contributors, © 2007-2014 Juan Linietsky,
+Ariel Manzur. Consulta [LICENSE.txt](LICENSE.txt), [COPYRIGHT.txt](COPYRIGHT.txt) y
+[AUTHORS.md](AUTHORS.md).

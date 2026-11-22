@@ -42,17 +42,17 @@ def generate_bundle(target, source, env):
         if not os.path.isdir(app_dir + "/Contents/MacOS"):
             os.mkdir(app_dir + "/Contents/MacOS")
         if target_bin != "":
-            shutil.copy(target_bin, app_dir + "/Contents/MacOS/Godot")
+            shutil.copy(target_bin, app_dir + "/Contents/MacOS/IPDE")
         if "mono" in env.module_version_string:
             shutil.copytree(env.Dir("#bin/GodotSharp").abspath, app_dir + "/Contents/Resources/GodotSharp")
         version = get_version_info("", True)
         with open(env.Dir("#misc/dist/macos").abspath + "/editor_info_plist.template", "rt", encoding="utf-8") as fin:
             with open(app_dir + "/Contents/Info.plist", "wt", encoding="utf-8", newline="\n") as fout:
                 for line in fin:
-                    line = line.replace("$version", "{major}.{minor}.{patch}.{status}.{build}".format(**version))
-                    line = line.replace("$short_version", "{major}.{minor}.{patch}".format(**version))
+                    line = line.replace("$version", "{ipde_major}.{ipde_minor}.{ipde_patch}.{ipde_channel}".format(**version))
+                    line = line.replace("$short_version", "{ipde_major}.{ipde_minor}.{ipde_patch}".format(**version))
                     if version["build"] != "official" and version["build"] != "steam":
-                        line = line.replace("org.godotengine.godot", "org.godotengine.godot." + version["build"])
+                        line = line.replace("com.ikerplays.ipde", "com.ikerplays.ipde." + version["build"])
                     fout.write(line)
 
         # Sign .app bundle.
