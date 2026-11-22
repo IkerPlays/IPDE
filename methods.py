@@ -152,7 +152,28 @@ def get_version_info(module_version_string="", silent=False):
         "module_config": str(version.module_config) + module_version_string,
         "website": str(version.website),
         "docs_branch": str(version.docs),
+        "ipde_major": int(version.ipde_major),
+        "ipde_minor": int(version.ipde_minor),
+        "ipde_patch": int(version.ipde_patch),
+        "ipde_channel": str(version.ipde_channel),
+        "ipde_repository": str(version.ipde_repository),
     }
+
+    # IPDE: `ipde_*` fields in version.py hold IPDE's own version, published on GitHub Releases
+    # as "IPDE v.<major>.<minor>.<patch>" ("stable" or "devbuild" channel). The release
+    # workflow overrides them with the `IPDE_VERSION` and `IPDE_CHANNEL` environment variables.
+    if os.getenv("IPDE_VERSION"):
+        parts = str(os.getenv("IPDE_VERSION")).lstrip("v.").split(".")
+        if len(parts) != 3 or not all(p.isdigit() for p in parts):
+            print_error(f"Invalid IPDE_VERSION '{os.getenv('IPDE_VERSION')}', expected X.Y.Z.")
+            sys.exit(255)
+        version_info["ipde_major"], version_info["ipde_minor"], version_info["ipde_patch"] = (int(p) for p in parts)
+    if os.getenv("IPDE_CHANNEL"):
+        channel = str(os.getenv("IPDE_CHANNEL")).lower()
+        if channel not in ("stable", "devbuild"):
+            print_error(f"Invalid IPDE_CHANNEL '{channel}', expected 'stable' or 'devbuild'.")
+            sys.exit(255)
+        version_info["ipde_channel"] = channel
 
     # For dev snapshots (alpha, beta, RC, etc.) we do not commit status change to Git,
     # so this define provides a way to override it without having to modify the source.

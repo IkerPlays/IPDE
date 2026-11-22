@@ -385,15 +385,15 @@ void Main::print_header(bool p_rich) {
 	if (GODOT_VERSION_TIMESTAMP > 0) {
 		// Version timestamp available.
 		if (p_rich) {
-			Engine::get_singleton()->print_header_rich("\u001b[38;5;39m" + String(GODOT_VERSION_NAME) + "\u001b[0m v" + get_full_version_string() + " (" + Time::get_singleton()->get_datetime_string_from_unix_time(GODOT_VERSION_TIMESTAMP, true) + " UTC) - \u001b[4m" + String(GODOT_VERSION_WEBSITE));
+			Engine::get_singleton()->print_header_rich("\u001b[38;5;39m" + String(IPDE_VERSION_FULL_NAME) + "\u001b[0m (Godot v" + get_full_version_string() + ")" + " (" + Time::get_singleton()->get_datetime_string_from_unix_time(GODOT_VERSION_TIMESTAMP, true) + " UTC) - \u001b[4m" + String(GODOT_VERSION_WEBSITE));
 		} else {
-			Engine::get_singleton()->print_header(String(GODOT_VERSION_NAME) + " v" + get_full_version_string() + " (" + Time::get_singleton()->get_datetime_string_from_unix_time(GODOT_VERSION_TIMESTAMP, true) + " UTC) - " + String(GODOT_VERSION_WEBSITE));
+			Engine::get_singleton()->print_header(String(IPDE_VERSION_FULL_NAME) + " (Godot v" + get_full_version_string() + ")" + " (" + Time::get_singleton()->get_datetime_string_from_unix_time(GODOT_VERSION_TIMESTAMP, true) + " UTC) - " + String(GODOT_VERSION_WEBSITE));
 		}
 	} else {
 		if (p_rich) {
-			Engine::get_singleton()->print_header_rich("\u001b[38;5;39m" + String(GODOT_VERSION_NAME) + "\u001b[0m v" + get_full_version_string() + " - \u001b[4m" + String(GODOT_VERSION_WEBSITE));
+			Engine::get_singleton()->print_header_rich("\u001b[38;5;39m" + String(IPDE_VERSION_FULL_NAME) + "\u001b[0m (Godot v" + get_full_version_string() + ")" + " - \u001b[4m" + String(GODOT_VERSION_WEBSITE));
 		} else {
-			Engine::get_singleton()->print_header(String(GODOT_VERSION_NAME) + " v" + get_full_version_string() + " - " + String(GODOT_VERSION_WEBSITE));
+			Engine::get_singleton()->print_header(String(IPDE_VERSION_FULL_NAME) + " (Godot v" + get_full_version_string() + ")" + " - " + String(GODOT_VERSION_WEBSITE));
 		}
 	}
 }
@@ -5421,7 +5421,13 @@ void Main::cleanup(bool p_force) {
 	if (OS::get_singleton()->is_restart_on_exit_set()) {
 		//attempt to restart with arguments
 		List<String> args = OS::get_singleton()->get_restart_on_exit_arguments();
-		OS::get_singleton()->create_instance(args);
+		const String restart_executable = OS::get_singleton()->get_restart_executable_path();
+		if (!restart_executable.is_empty()) {
+			// IPDE: the updater replaced the executable, launch the new one.
+			OS::get_singleton()->create_process(restart_executable, args);
+		} else {
+			OS::get_singleton()->create_instance(args);
+		}
 		OS::get_singleton()->set_restart_on_exit(false, List<String>()); //clear list (uses memory)
 	}
 

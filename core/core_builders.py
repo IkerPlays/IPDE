@@ -30,6 +30,11 @@ def version_info_builder(target, source, env):
 #define GODOT_VERSION_WEBSITE "{website}"
 #define GODOT_VERSION_DOCS_BRANCH "{docs_branch}"
 #define GODOT_VERSION_DOCS_URL "https://docs.godotengine.org/en/" GODOT_VERSION_DOCS_BRANCH
+#define IPDE_VERSION_MAJOR {ipde_major}
+#define IPDE_VERSION_MINOR {ipde_minor}
+#define IPDE_VERSION_PATCH {ipde_patch}
+#define IPDE_VERSION_CHANNEL "{ipde_channel}"
+#define IPDE_GITHUB_REPOSITORY "{ipde_repository}"
 """.format(**source[0].read())
         )
 

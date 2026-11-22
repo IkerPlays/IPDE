@@ -1,9 +1,14 @@
 short_name = "godot"
-name = "Godot Engine"
+name = "IPDE"
 major = 4
 minor = 8
 patch = 0
 status = "beta"
 module_config = ""
-website = "https://godotengine.org"
+website = "https://github.com/IkerPlays/IPDE"
 docs = "latest"
+ipde_major = 0
+ipde_minor = 1
+ipde_patch = 0
+ipde_channel = "devbuild"
+ipde_repository = "IkerPlays/IPDE"

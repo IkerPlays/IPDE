@@ -58,15 +58,45 @@ ext {
     }
 }
 
+// IPDE: the editor version follows IPDE's own version ("ipde_*" keys in version.py,
+// overridable with the IPDE_VERSION / IPDE_CHANNEL environment variables).
+def getIpdeVersion() {
+    def map = [ipde_major: "0", ipde_minor: "1", ipde_patch: "0", ipde_channel: "devbuild"]
+    File versionFile = new File("../../../version.py")
+    if (versionFile.isFile()) {
+        for (String line in versionFile.readLines()) {
+            String[] keyValue = line.split("=")
+            if (keyValue.length == 2 && map.containsKey(keyValue[0].trim())) {
+                map[keyValue[0].trim()] = keyValue[1].trim().replaceAll("\"", "")
+            }
+        }
+    }
+    String envVersion = System.getenv("IPDE_VERSION")
+    if (envVersion != null && !envVersion.isEmpty()) {
+        String[] parts = envVersion.replaceAll("^[vV.]+", "").split("\\.")
+        if (parts.length == 3) {
+            map.ipde_major = parts[0]
+            map.ipde_minor = parts[1]
+            map.ipde_patch = parts[2]
+        }
+    }
+    String envChannel = System.getenv("IPDE_CHANNEL")
+    if (envChannel != null && !envChannel.isEmpty()) {
+        map.ipde_channel = envChannel
+    }
+    return map
+}
+
 def generateVersionCode() {
-    int libraryVersionCode = getGodotLibraryVersionCode()
-    return (libraryVersionCode * editorBuildNumberOffset) + getEditorBuildNumber()
+    def v = getIpdeVersion()
+    // Stables get a higher code than devbuilds with the same number.
+    int code = (Integer.parseInt(v.ipde_major) * 1000000 + Integer.parseInt(v.ipde_minor) * 1000 + Integer.parseInt(v.ipde_patch)) * 10
+    return code + (v.ipde_channel == "stable" ? 5 : 0) + 1
 }
 
 def generateVersionName() {
-    String libraryVersionName = getGodotLibraryVersionName()
-    int buildNumber = getEditorBuildNumber()
-    return buildNumber == 0 ? libraryVersionName : libraryVersionName + ".$buildNumber"
+    def v = getIpdeVersion()
+    return "${v.ipde_major}.${v.ipde_minor}.${v.ipde_patch}-${v.ipde_channel}"
 }
 
 android {
@@ -78,7 +108,7 @@ android {
 
     defaultConfig {
         // The 'applicationId' suffix allows to install Godot 3.x(v3) and 4.x(v4) on the same device
-        applicationId "org.godotengine.editor.v4"
+        applicationId "com.ikerplays.ipde"
         versionCode generateVersionCode()
         versionName generateVersionName()
         minSdkVersion versions.minSdk
@@ -86,7 +116,7 @@ android {
 
         missingDimensionStrategy 'products', 'editor'
         manifestPlaceholders += [
-            editorAppName: "Godot Engine 4",
+            editorAppName: "IPDE",
             editorBuildSuffix: ""
         ]
 

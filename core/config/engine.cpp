@@ -176,6 +176,13 @@ Dictionary Engine::get_version_info() const {
 	stringver += "-" + String(dict["status"]) + " (" + String(dict["build"]) + ")";
 	dict["string"] = stringver;
 
+	// IPDE version information.
+	dict["ipde_major"] = IPDE_VERSION_MAJOR;
+	dict["ipde_minor"] = IPDE_VERSION_MINOR;
+	dict["ipde_patch"] = IPDE_VERSION_PATCH;
+	dict["ipde_channel"] = IPDE_VERSION_CHANNEL;
+	dict["ipde_string"] = IPDE_VERSION_FULL_NAME;
+
 	return dict;
 }
 

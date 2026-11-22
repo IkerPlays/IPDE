@@ -100,6 +100,7 @@ private:
 	CompositeLogger *_logger = nullptr;
 
 	bool restart_on_exit = false;
+	String restart_executable_path; // IPDE: overrides the executable used when restarting (set by the updater).
 	List<String> restart_commandline;
 
 	String _current_rendering_driver_name;
@@ -375,6 +376,8 @@ public:
 	void set_restart_on_exit(bool p_restart, const List<String> &p_restart_arguments);
 	bool is_restart_on_exit_set() const;
 	List<String> get_restart_on_exit_arguments() const;
+	void set_restart_executable_path(const String &p_path) { restart_executable_path = p_path; }
+	String get_restart_executable_path() const { return restart_executable_path; }
 
 	virtual bool request_permission(const String &p_name) { return true; }
 	virtual bool request_permissions() { return true; }

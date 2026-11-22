@@ -1324,6 +1324,15 @@
 			A touch-friendly panel that provides easy access to common actions such as save, delete, undo, and redo without requiring a keyboard.
 			[b]Note:[/b] Only available in the Android and XR editor.
 		</member>
+		<member name="ipde/updates/check_on_startup" type="bool" setter="" getter="">
+			If [code]true[/code], IPDE checks GitHub Releases for a newer stable version when the project manager or the editor starts, and asks whether to update.
+		</member>
+		<member name="ipde/updates/notify_devbuilds" type="bool" setter="" getter="">
+			If [code]true[/code], the startup update check also offers newer devbuilds, not only stable releases.
+		</member>
+		<member name="ipde/updates/repository" type="String" setter="" getter="">
+			The GitHub repository ([code]owner/name[/code]) where IPDE releases are published. The repository must be public.
+		</member>
 		<member name="network/connection/check_for_updates" type="int" setter="" getter="">
 			Specifies how the engine should check for updates.
 			- [b]Disable Update Checks[/b] will block the engine from checking updates (see also [member network/connection/network_mode]).

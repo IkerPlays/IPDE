@@ -78,6 +78,15 @@
 // Example: "Godot v3.1.4.stable.official.mono.double"
 #define GODOT_VERSION_FULL_NAME GODOT_VERSION_NAME " v" GODOT_VERSION_FULL_BUILD
 
+// IPDE version, published on GitHub Releases as "IPDE v.X.Y.Z".
+// Example: "0.1.0"
+#define IPDE_VERSION_NUMBER _MKSTR(IPDE_VERSION_MAJOR) "." _MKSTR(IPDE_VERSION_MINOR) "." _MKSTR(IPDE_VERSION_PATCH)
+// Example: "IPDE v.0.1.0"
+#define IPDE_VERSION_DISPLAY "IPDE v." IPDE_VERSION_NUMBER
+// Example: "IPDE v.0.1.0 (devbuild)"
+#define IPDE_VERSION_FULL_NAME IPDE_VERSION_DISPLAY " (" IPDE_VERSION_CHANNEL ")"
+#define IPDE_VERSION_HEX (0x10000 * IPDE_VERSION_MAJOR + 0x100 * IPDE_VERSION_MINOR + IPDE_VERSION_PATCH)
+
 // Git commit hash, generated at build time in `core/version_hash.gen.cpp`.
 extern const char *const GODOT_VERSION_HASH;
 
