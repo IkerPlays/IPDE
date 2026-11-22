@@ -104,15 +104,14 @@ bool IPDEUpdater::_parse_version(const String &p_tag, int &r_major, int &r_minor
 }
 
 String IPDEUpdater::_get_platform_asset_suffix() {
-	const String arch = Engine::get_singleton()->get_architecture_name();
 #if defined(WINDOWS_ENABLED)
-	return "_windows_" + arch + ".zip";
+	return "_windows_" + Engine::get_singleton()->get_architecture_name() + ".zip";
 #elif defined(MACOS_ENABLED)
 	return "_macos_universal.zip";
 #elif defined(ANDROID_ENABLED)
 	return "_android_editor.apk";
 #elif defined(LINUXBSD_ENABLED)
-	return "_linux_" + arch + ".zip";
+	return "_linux_" + Engine::get_singleton()->get_architecture_name() + ".zip";
 #else
 	return String();
 #endif

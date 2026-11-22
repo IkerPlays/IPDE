@@ -298,7 +298,8 @@ jobs:
 
       - name: Compilation
         run: |
-          scons platform=android arch=arm64 $SCONS_FLAGS "cache_path=${{ github.workspace }}/.scons_cache/"
+          # store_release=yes builds the "release" variant: no "(debug)" suffix, signed with the IPDE key.
+          scons platform=android arch=arm64 store_release=yes $SCONS_FLAGS "cache_path=${{ github.workspace }}/.scons_cache/"
 
       - name: Save build cache
         uses: ./.github/actions/godot-cache-save
