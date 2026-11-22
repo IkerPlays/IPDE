@@ -1167,6 +1167,11 @@ void EditorSettings::_load_defaults(Ref<ConfigFile> p_extra_config) {
 #endif
 	EDITOR_SETTING_BASIC(Variant::INT, PROPERTY_HINT_ENUM, "network/connection/network_mode", network_mode, "Offline,Online");
 
+	// IPDE updater (uses GitHub Releases, independent from the Godot update checks above).
+	EDITOR_SETTING_BASIC(Variant::BOOL, PROPERTY_HINT_NONE, "ipde/updates/check_on_startup", true, "")
+	EDITOR_SETTING_BASIC(Variant::BOOL, PROPERTY_HINT_NONE, "ipde/updates/notify_devbuilds", false, "")
+	EDITOR_SETTING(Variant::STRING, PROPERTY_HINT_NONE, "ipde/updates/repository", IPDE_GITHUB_REPOSITORY, "")
+
 	// HTTP Proxy
 	_initial_set("network/http_proxy/host", "");
 	EDITOR_SETTING(Variant::INT, PROPERTY_HINT_RANGE, "network/http_proxy/port", 8080, "1,65535,1")

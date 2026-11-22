@@ -23019,3 +23019,211 @@ msgstr ""
 "cambió en la versión 4.3, por lo que si este código se escribió antes de la "
 "4.3, no seguirá funcionando. Considere especificar el componente z del "
 "espacio de recorte directamente, es decir, use `vec4(VERTEX.xy, 1.0, 1.0)`."
+
+#. IPDE strings.
+msgid "%s (%s) has been installed.\n\nRestart IPDE now?"
+msgstr "Se ha instalado %s (%s).\n\n¿Reiniciar IPDE ahora?"
+
+msgid "%s installed. Restart IPDE to use it."
+msgstr "%s instalada. Reinicia IPDE para usarla."
+
+msgid "%s (%s) is available!"
+msgstr "¡%s (%s) está disponible!"
+
+msgid "%s has no build for this platform (%s)."
+msgstr "%s no tiene compilación para esta plataforma (%s)."
+
+msgid "A new stable version is available: %s."
+msgstr "Hay una nueva versión stable disponible: %s."
+
+msgid "About IPDE"
+msgstr "Acerca de IPDE"
+
+msgid "Can't move the new version to \"%s\"."
+msgstr "No se pudo mover la nueva versión a \"%s\"."
+
+msgid "Can't open the downloaded update package."
+msgstr "No se pudo abrir el paquete de actualización descargado."
+
+msgid "Can't replace \"%s\". Check that you have write permissions to the IPDE installation folder."
+msgstr "No se pudo reemplazar \"%s\". Comprueba que tienes permisos de escritura en la carpeta de instalación de IPDE."
+
+msgid "Can't write \"%s\". Check that you have write permissions to the IPDE installation folder."
+msgstr "No se pudo escribir \"%s\". Comprueba que tienes permisos de escritura en la carpeta de instalación de IPDE."
+
+msgid "Can't write to \"%s\". Check that you have write permissions to the IPDE installation folder."
+msgstr "No se puede escribir en \"%s\". Comprueba que tienes permisos de escritura en la carpeta de instalación de IPDE."
+
+msgid "Channel"
+msgstr "Canal"
+
+msgid "Check for IPDE Updates"
+msgstr "Buscar actualizaciones de IPDE"
+
+msgid "Copied IPDE editor version."
+msgstr "Versión del editor IPDE copiada."
+
+msgid "Couldn't connect to GitHub (error %d)."
+msgstr "No se pudo conectar con GitHub (error %d)."
+
+msgid "Couldn't start the download (error %d)."
+msgstr "No se pudo iniciar la descarga (error %d)."
+
+msgid "Date"
+msgstr "Fecha"
+
+msgid "DevBuild"
+msgstr "DevBuild"
+
+msgid "Do you want to update now?"
+msgstr "¿Quieres actualizar ahora?"
+
+msgid "Download failed (result %d, HTTP %d)."
+msgstr "La descarga ha fallado (resultado %d, HTTP %d)."
+
+msgid "Downloading %s..."
+msgstr "Descargando %s..."
+
+msgid "Downloading... %s"
+msgstr "Descargando... %s"
+
+msgid "Downloading... %s / %s"
+msgstr "Descargando... %s / %s"
+
+msgid "Error reading \"%s\" from the update package."
+msgstr "Error al leer \"%s\" del paquete de actualización."
+
+msgid "GitHub rate limit reached. Try again later."
+msgstr "Se alcanzó el límite de peticiones de GitHub. Inténtalo más tarde."
+
+msgid "IPDE Update Available"
+msgstr "Actualización de IPDE disponible"
+
+msgid "IPDE Updated"
+msgstr "IPDE actualizado"
+
+msgid "IPDE Updater"
+msgstr "Actualizador de IPDE"
+
+msgid "IPDE Versions & Updates"
+msgstr "Versiones y actualizaciones de IPDE"
+
+msgid "IPDE Versions & Updates..."
+msgstr "Versiones y actualizaciones de IPDE..."
+
+msgid "IPDE is not running from an .app bundle, it can't be updated automatically."
+msgstr "IPDE no se está ejecutando desde un paquete .app, no se puede actualizar automáticamente."
+
+msgid "IPDE is up to date"
+msgstr "IPDE está actualizado"
+
+msgid "IPDE will download the update and restart automatically."
+msgstr "IPDE descargará la actualización y se reiniciará automáticamente."
+
+msgid "Install %s"
+msgstr "Instalar %s"
+
+msgid "Install %s (%s)?\n\nThis is an older version than the one you are using. Projects saved with newer versions might not open correctly."
+msgstr "¿Instalar %s (%s)?\n\nEs una versión más antigua que la que estás usando. Los proyectos guardados con versiones más nuevas podrían no abrirse correctamente."
+
+msgid "Install %s (DevBuild)?\n\nDevBuilds are development builds and may be unstable. Back up your projects."
+msgstr "¿Instalar %s (DevBuild)?\n\nLas DevBuilds son compilaciones de desarrollo y pueden ser inestables. Haz copia de seguridad de tus proyectos."
+
+msgid "Install %s (Stable)?"
+msgstr "¿Instalar %s (Stable)?"
+
+msgid "Install IPDE Version"
+msgstr "Instalar versión de IPDE"
+
+msgid "Installed"
+msgstr "Instalada"
+
+msgid "Installed: %s"
+msgstr "Instalada: %s"
+
+msgid "Installing %s..."
+msgstr "Instalando %s..."
+
+msgid "Invalid response received from GitHub."
+msgstr "Se recibió una respuesta no válida de GitHub."
+
+msgid "Later"
+msgstr "Más tarde"
+
+msgid "Looking for IPDE releases..."
+msgstr "Buscando versiones de IPDE..."
+
+msgid "Newer"
+msgstr "Más nueva"
+
+msgid "No IPDE releases have been published yet."
+msgstr "Todavía no se ha publicado ninguna versión de IPDE."
+
+msgid "No release notes."
+msgstr "Sin notas de la versión."
+
+msgid "Not Now"
+msgstr "Ahora no"
+
+msgid "Older"
+msgstr "Más antigua"
+
+msgid "Open Release Page"
+msgstr "Abrir página de la versión"
+
+msgid "Open on GitHub"
+msgstr "Abrir en GitHub"
+
+msgid "Reinstall"
+msgstr "Reinstalar"
+
+msgid "Repository \"%s\" not found. It must be public for the updater to work."
+msgstr "No se encontró el repositorio \"%s\". Debe ser público para que funcione el actualizador."
+
+msgid "Show DevBuilds"
+msgstr "Mostrar DevBuilds"
+
+msgid "Skip This Version"
+msgstr "Omitir esta versión"
+
+msgid "Stable"
+msgstr "Stable"
+
+msgid "The APK is being downloaded. Open it to install the update."
+msgstr "Se está descargando el APK. Ábrelo para instalar la actualización."
+
+msgid "The update package doesn't contain an .app bundle."
+msgstr "El paquete de actualización no contiene un paquete .app."
+
+msgid "The update package doesn't contain the IPDE executable."
+msgstr "El paquete de actualización no contiene el ejecutable de IPDE."
+
+msgid "This release has no build for your platform."
+msgstr "Esta versión no tiene compilación para tu plataforma."
+
+msgid "Unexpected response from GitHub: %d."
+msgstr "Respuesta inesperada de GitHub: %d."
+
+msgid "Update available: %s"
+msgstr "Actualización disponible: %s"
+
+msgid "Update failed."
+msgstr "La actualización ha fallado."
+
+msgid "Update to %s"
+msgstr "Actualizar a %s"
+
+msgid "You are using %s."
+msgstr "Estás usando %s."
+
+msgid "You are using the latest stable version of IPDE."
+msgstr "Estás usando la última versión stable de IPDE."
+
+msgid "You can download it manually from the release page."
+msgstr "Puedes descargarla manualmente desde la página de la versión."
+
+msgid "based on Godot Engine"
+msgstr "basado en Godot Engine"
+
+msgid "not available for this platform"
+msgstr "no disponible para esta plataforma"

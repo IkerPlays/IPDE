@@ -111,6 +111,7 @@
 #include "editor/import/resource_importer_texture_atlas.h"
 #include "editor/import/resource_importer_wav.h"
 #include "editor/inspector/editor_context_menu_plugin.h"
+#include "editor/ipde/ipde_updater.h"
 #include "editor/inspector/editor_inspector.h"
 #include "editor/inspector/editor_preview_plugins.h"
 #include "editor/inspector/editor_properties.h"
@@ -746,6 +747,7 @@ void EditorNode::_update_system_menu_icons(bool p_dark_mode) {
 
 	help_menu->set_item_icon(help_menu->get_item_index(HELP_SEARCH), get_editor_theme_native_menu_icon(SNAME("HelpSearch"), menu_type == MENU_TYPE_GLOBAL, p_dark_mode));
 	help_menu->set_item_icon(help_menu->get_item_index(HELP_COPY_SYSTEM_INFO), get_editor_theme_native_menu_icon(SNAME("ActionCopy"), menu_type == MENU_TYPE_GLOBAL, p_dark_mode));
+	help_menu->set_item_icon(help_menu->get_item_index(HELP_IPDE_UPDATES), get_editor_theme_native_menu_icon(SNAME("Reload"), menu_type == MENU_TYPE_GLOBAL, p_dark_mode));
 #ifdef MACOS_ENABLED
 	if (menu_type != MENU_TYPE_GLOBAL) {
 		help_menu->set_item_icon(help_menu->get_item_index(HELP_ABOUT), get_editor_theme_native_menu_icon(SNAME("Godot"), menu_type == MENU_TYPE_GLOBAL, p_dark_mode));
@@ -4048,6 +4050,11 @@ void EditorNode::_menu_option_confirm(int p_option, bool p_confirmed) {
 		} break;
 		case HELP_COMMUNITY: {
 			OS::get_singleton()->shell_open("https://godotengine.org/community");
+		} break;
+		case HELP_IPDE_UPDATES: {
+			if (IPDEUpdater::get_singleton()) {
+				IPDEUpdater::get_singleton()->show_version_manager();
+			}
 		} break;
 		case HELP_ABOUT: {
 			if (!about) {
@@ -8369,6 +8376,7 @@ void EditorNode::_build_help_menu(bool p_dark_mode) {
 	help_menu->add_shortcut(ED_GET_SHORTCUT("editor/suggest_a_feature"), HELP_SUGGEST_A_FEATURE);
 	help_menu->add_shortcut(ED_GET_SHORTCUT("editor/send_docs_feedback"), HELP_SEND_DOCS_FEEDBACK);
 	help_menu->add_separator();
+	help_menu->add_icon_item(get_editor_theme_native_menu_icon(SNAME("Reload"), menu_type == MENU_TYPE_GLOBAL, p_dark_mode), TTRC("IPDE Versions & Updates..."), HELP_IPDE_UPDATES);
 #ifdef MACOS_ENABLED
 	if (menu_type != MENU_TYPE_GLOBAL) {
 		// On macOS "About" option is in the "app" menu.
@@ -9152,6 +9160,8 @@ EditorNode::EditorNode() {
 
 	export_template_manager = memnew(ExportTemplateManager);
 	gui_base->add_child(export_template_manager);
+
+	gui_base->add_child(memnew(IPDEUpdater(IPDEUpdater::CONTEXT_EDITOR)));
 
 	feature_profile_manager = memnew(EditorFeatureProfileManager);
 	gui_base->add_child(feature_profile_manager);

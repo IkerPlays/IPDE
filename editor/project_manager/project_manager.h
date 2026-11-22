@@ -40,6 +40,7 @@ class EditorFileDialog;
 class EditorTitleBar;
 class HFlowContainer;
 class LineEdit;
+class LinkButton;
 class MarginContainer;
 class OptionButton;
 class PanelContainer;
@@ -134,6 +135,8 @@ class ProjectManager : public Control {
 	QuickSettingsDialog *quick_settings_dialog = nullptr;
 
 	void _show_quick_settings();
+	LinkButton *ipde_update_link = nullptr;
+	void _ipde_releases_updated(const String &p_newest);
 	void _restart_confirmed();
 
 	// Project list.

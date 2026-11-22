@@ -49,6 +49,7 @@
 #include "editor/gui/editor_title_bar.h"
 #include "editor/gui/editor_version_button.h"
 #include "editor/inspector/editor_inspector.h"
+#include "editor/ipde/ipde_updater.h"
 #include "editor/project_manager/engine_update_label.h"
 #include "editor/project_manager/project_dialog.h"
 #include "editor/project_manager/project_list.h"
@@ -510,6 +511,16 @@ void ProjectManager::_show_quick_settings() {
 		EditorHelp::generate_doc();
 	}
 	quick_settings_dialog->popup_centered(Size2(640, 200) * EDSCALE);
+}
+
+void ProjectManager::_ipde_releases_updated(const String &p_newest) {
+	if (p_newest.is_empty()) {
+		ipde_update_link->set_text(TTR("IPDE is up to date"));
+		ipde_update_link->remove_theme_color_override(SceneStringName(font_color));
+	} else {
+		ipde_update_link->set_text(vformat(TTR("Update available: %s"), p_newest));
+		ipde_update_link->add_theme_color_override(SceneStringName(font_color), get_theme_color(SNAME("success_color"), EditorStringName(Editor)));
+	}
 }
 
 void ProjectManager::_restart_confirmed() {
@@ -1881,11 +1892,16 @@ ProjectManager::ProjectManager() {
 		footer_bar->add_theme_constant_override("separation", 20 * EDSCALE);
 		main_vbox->add_child(footer_bar);
 
-#ifdef ENGINE_UPDATE_CHECK_ENABLED
-		EngineUpdateLabel *update_label = memnew(EngineUpdateLabel);
-		footer_bar->add_child(update_label);
-		update_label->connect("offline_clicked", callable_mp(this, &ProjectManager::_show_quick_settings));
-#endif
+		// IPDE updater (replaces Godot's engine update label).
+		IPDEUpdater *ipde_updater = memnew(IPDEUpdater(IPDEUpdater::CONTEXT_PROJECT_MANAGER));
+		add_child(ipde_updater);
+
+		ipde_update_link = memnew(LinkButton);
+		ipde_update_link->set_text(TTRC("Check for IPDE Updates"));
+		ipde_update_link->set_underline_mode(LinkButton::UNDERLINE_MODE_ON_HOVER);
+		ipde_update_link->connect(SceneStringName(pressed), callable_mp(ipde_updater, &IPDEUpdater::show_version_manager));
+		ipde_updater->connect("releases_updated", callable_mp(this, &ProjectManager::_ipde_releases_updated));
+		footer_bar->add_child(ipde_update_link);
 
 		EditorVersionButton *version_btn = memnew(EditorVersionButton(EditorVersionButton::FORMAT_WITH_BUILD));
 		// Fade the version label to be less prominent, but still readable.
