@@ -104,6 +104,36 @@ void EditorAssetLibraryItem::_notification(int p_what) {
 			verified->set_texture(get_editor_theme_icon(SNAME("Verified")));
 			rating_icon->set_texture(get_editor_theme_icon(SNAME("ThumbsUp")));
 
+			// IPDE: show each asset as a card.
+			if (button) {
+				const Color base = get_theme_color(SNAME("base_color"), EditorStringName(Editor));
+				const Color accent = get_theme_color(SNAME("accent_color"), EditorStringName(Editor));
+				const Color mono = get_theme_color(SNAME("mono_color"), EditorStringName(Editor));
+				const int radius = MAX(4, int(EDITOR_GET("interface/theme/corner_radius"))) * EDSCALE * 1.5;
+
+				Ref<StyleBoxFlat> card_normal;
+				card_normal.instantiate();
+				card_normal->set_bg_color(base.lerp(mono, 0.06));
+				card_normal->set_corner_radius_all(radius);
+				card_normal->set_border_width_all(MAX(1, EDSCALE));
+				card_normal->set_border_color(base.lerp(mono, 0.1));
+
+				Ref<StyleBoxFlat> card_hover = card_normal->duplicate();
+				card_hover->set_bg_color(base.lerp(mono, 0.1));
+				card_hover->set_border_color(accent);
+
+				Ref<StyleBoxFlat> card_pressed = card_hover->duplicate();
+				card_pressed->set_bg_color(base.lerp(accent, 0.2));
+
+				button->begin_bulk_theme_override();
+				button->add_theme_style_override(CoreStringName(normal), card_normal);
+				button->add_theme_style_override(SNAME("hover"), card_hover);
+				button->add_theme_style_override(SNAME("hover_pressed"), card_pressed);
+				button->add_theme_style_override(SceneStringName(pressed), card_pressed);
+				button->add_theme_style_override(SNAME("focus"), card_hover);
+				button->end_bulk_theme_override();
+			}
+
 			_calculate_misc_links_size();
 		} break;
 
@@ -153,7 +183,7 @@ EditorAssetLibraryItem::EditorAssetLibraryItem(bool p_clickable) {
 	}
 
 	margin = memnew(MarginContainer);
-	int margin_size = 5 * EDSCALE;
+	int margin_size = 8 * EDSCALE;
 	margin->add_theme_constant_override(SNAME("margin_left"), margin_size);
 	margin->add_theme_constant_override(SNAME("margin_right"), margin_size);
 	margin->add_theme_constant_override(SNAME("margin_top"), margin_size);
@@ -419,11 +449,11 @@ void EditorAssetLibraryItemDescription::_version_selected(int p_index) {
 	if (show_warning) {
 		String tooltip;
 		if (!compat_min.is_empty() && !compat_max.is_empty()) {
-			tooltip += vformat(TTR("This release is only compatible with Godot versions between %s and %s."), compat_min, compat_max);
+			tooltip += vformat(TTR("This release is only compatible with engine versions between %s and %s."), compat_min, compat_max);
 		} else if (!compat_min.is_empty()) {
-			tooltip += vformat(TTR("This release is only compatible with Godot version %s and newer."), compat_min);
+			tooltip += vformat(TTR("This release is only compatible with engine version %s and newer."), compat_min);
 		} else {
-			tooltip += vformat(TTR("This release is only compatible with Godot version %s and older."), compat_max);
+			tooltip += vformat(TTR("This release is only compatible with engine version %s and older."), compat_max);
 		}
 
 		tooltip += "\n";
@@ -1882,8 +1912,8 @@ void EditorAssetLibrary::_http_request_completed(int p_status, int p_code, const
 
 			asset_items = memnew(GridContainer);
 			_update_asset_items_columns();
-			asset_items->add_theme_constant_override("h_separation", 0);
-			asset_items->add_theme_constant_override("v_separation", 0);
+			asset_items->add_theme_constant_override("h_separation", 10 * EDSCALE);
+			asset_items->add_theme_constant_override("v_separation", 10 * EDSCALE);
 
 			library_vb->add_child(asset_items);
 
@@ -2144,7 +2174,7 @@ void EditorAssetLibrary::_update_asset_items_columns() {
 		return;
 	}
 
-	int new_columns = get_size().x / (450.0 * EDSCALE);
+	int new_columns = get_size().x / (340.0 * EDSCALE);
 	new_columns = MAX(1, new_columns);
 
 	if (new_columns != asset_items->get_columns()) {
