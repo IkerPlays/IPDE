@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="AutoRotate2D" inherits="Node2D" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		Rotates continuously.
+	</brief_description>
+	<description>
+		A [Node2D] that rotates continuously at [member rotation_speed] degrees per second while the game runs. It doesn't rotate in the editor.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="active" type="bool" setter="set_active" getter="is_active" default="true">
+			If [code]false[/code], the node stops rotating.
+		</member>
+		<member name="rotation_speed" type="float" setter="set_rotation_speed" getter="get_rotation_speed" default="90.0">
+			Rotation speed in degrees per second. Negative values rotate counterclockwise.
+		</member>
+	</members>
+</class>
