@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="HealthComponent" inherits="Node" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		Health and damage system for any object.
+	</brief_description>
+	<description>
+		Keeps track of the health of a character, enemy or object. Call [method damage] and [method heal], and connect to [signal died] to react when it reaches zero. After taking damage it can be invulnerable for [member invulnerability_time] seconds.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="damage">
+			<return type="float" />
+			<param index="0" name="amount" type="float" />
+			<description>
+				Subtracts [param amount] from the health and returns the damage actually dealt. Does nothing while dead or invulnerable.
+			</description>
+		</method>
+		<method name="get_health_ratio" qualifiers="const">
+			<return type="float" />
+			<description>
+				Returns the health divided by [member max_health], from [code]0[/code] to [code]1[/code]. Useful for health bars.
+			</description>
+		</method>
+		<method name="heal">
+			<return type="float" />
+			<param index="0" name="amount" type="float" />
+			<description>
+				Adds [param amount] to the health (up to [member max_health]) and returns the amount actually healed. Does nothing while dead.
+			</description>
+		</method>
+		<method name="is_dead" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Returns [code]true[/code] if the health reached [code]0[/code].
+			</description>
+		</method>
+		<method name="is_invulnerability_active" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Returns [code]true[/code] if [member invulnerable] is enabled or the invulnerability after the last hit is still active.
+			</description>
+		</method>
+		<method name="kill">
+			<return type="void" />
+			<description>
+				Sets the health to [code]0[/code], emitting [signal died].
+			</description>
+		</method>
+		<method name="revive">
+			<return type="void" />
+			<param index="0" name="health" type="float" default="-1.0" />
+			<description>
+				Brings the object back to life with [param health], or [member max_health] if it's negative.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="health" type="float" setter="set_health" getter="get_health" default="100.0">
+			Current health, between [code]0[/code] and [member max_health].
+		</member>
+		<member name="invulnerability_time" type="float" setter="set_invulnerability_time" getter="get_invulnerability_time" default="0.0">
+			Seconds of invulnerability after taking damage.
+		</member>
+		<member name="invulnerable" type="bool" setter="set_invulnerable" getter="is_invulnerable" default="false">
+			If [code]true[/code], [method damage] has no effect.
+		</member>
+		<member name="max_health" type="float" setter="set_max_health" getter="get_max_health" default="100.0">
+			Maximum health.
+		</member>
+	</members>
+	<signals>
+		<signal name="damaged">
+			<param index="0" name="amount" type="float" />
+			<description>
+				Emitted after taking damage, with the damage actually dealt.
+			</description>
+		</signal>
+		<signal name="died">
+			<description>
+				Emitted when the health reaches [code]0[/code].
+			</description>
+		</signal>
+		<signal name="healed">
+			<param index="0" name="amount" type="float" />
+			<description>
+				Emitted after healing, with the amount actually healed.
+			</description>
+		</signal>
+		<signal name="health_changed">
+			<param index="0" name="health" type="float" />
+			<param index="1" name="previous_health" type="float" />
+			<description>
+				Emitted when the health changes.
+			</description>
+		</signal>
+	</signals>
+</class>

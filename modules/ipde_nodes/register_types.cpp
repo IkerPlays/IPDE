@@ -30,6 +30,7 @@
 
 #include "register_types.h"
 
+#include "ipde_gameplay_nodes.h"
 #include "ipde_nodes.h"
 
 #include "core/object/class_db.h"
@@ -43,6 +44,13 @@ void initialize_ipde_nodes_module(ModuleInitializationLevel p_level) {
 		GDREGISTER_ABSTRACT_CLASS(ScreenShakeBase);
 		GDREGISTER_CLASS(ScreenShake2D);
 		GDREGISTER_CLASS(ScreenShake3D);
+		GDREGISTER_CLASS(HealthComponent);
+		GDREGISTER_CLASS(Lifetime);
+		GDREGISTER_CLASS(Bobbing2D);
+		GDREGISTER_CLASS(FollowTarget2D);
+		GDREGISTER_CLASS(FollowTarget3D);
+		GDREGISTER_CLASS(Spawner2D);
+		GDREGISTER_CLASS(Spawner3D);
 	}
 }
 

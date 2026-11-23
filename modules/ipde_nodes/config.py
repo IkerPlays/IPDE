@@ -15,6 +15,13 @@ def get_doc_classes():
         "ScreenShakeBase",
         "ScreenShake2D",
         "ScreenShake3D",
+        "HealthComponent",
+        "Lifetime",
+        "Bobbing2D",
+        "FollowTarget2D",
+        "FollowTarget3D",
+        "Spawner2D",
+        "Spawner3D",
     ]
 
 

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="Lifetime" inherits="Node" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		Frees its parent after some time.
+	</brief_description>
+	<description>
+		When the time runs out, frees its parent (or itself if [member free_parent] is [code]false[/code]). Add it to bullets, effects or debris so they disappear on their own.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="get_time_left" qualifiers="const">
+			<return type="float" />
+			<description>
+				Returns the seconds left, or [code]0[/code] if stopped.
+			</description>
+		</method>
+		<method name="start">
+			<return type="void" />
+			<param index="0" name="time" type="float" default="-1.0" />
+			<description>
+				Starts (or restarts) the countdown. If [param time] is not negative, it replaces [member time].
+			</description>
+		</method>
+		<method name="stop">
+			<return type="void" />
+			<description>
+				Stops the countdown.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="autostart" type="bool" setter="set_autostart" getter="is_autostart" default="true">
+			If [code]true[/code], the countdown starts when the node enters the scene.
+		</member>
+		<member name="free_parent" type="bool" setter="set_free_parent" getter="is_freeing_parent" default="true">
+			If [code]true[/code], frees the parent node; otherwise only this node.
+		</member>
+		<member name="time" type="float" setter="set_time" getter="get_time" default="5.0">
+			Seconds before the node is freed.
+		</member>
+	</members>
+	<signals>
+		<signal name="expired">
+			<description>
+				Emitted right before freeing the node.
+			</description>
+		</signal>
+	</signals>
+</class>

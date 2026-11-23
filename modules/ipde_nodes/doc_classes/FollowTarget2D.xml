@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="FollowTarget2D" inherits="Node2D" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		Smoothly follows another node.
+	</brief_description>
+	<description>
+		Moves towards [member target] every physics frame, with optional smoothing. It doesn't move in the editor.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="snap_to_target">
+			<return type="void" />
+			<description>
+				Moves to the target immediately, without smoothing.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="active" type="bool" setter="set_active" getter="is_active" default="true">
+			If [code]false[/code], stops following.
+		</member>
+		<member name="offset" type="Vector2" setter="set_offset" getter="get_offset" default="Vector2(0, 0)">
+			Offset from the target's position, in pixels.
+		</member>
+		<member name="smoothing" type="float" setter="set_smoothing" getter="get_smoothing" default="5.0">
+			How fast it catches up with the target. [code]0[/code] follows it instantly.
+		</member>
+		<member name="target" type="NodePath" setter="set_target" getter="get_target" default="NodePath(&quot;&quot;)">
+			The node to follow.
+		</member>
+	</members>
+</class>
