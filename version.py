@@ -9,6 +9,6 @@ website = "https://github.com/IkerPlays/IPDE"
 docs = "latest"
 ipde_major = 0
 ipde_minor = 2
-ipde_patch = 0
+ipde_patch = 1
 ipde_channel = "devbuild"
 ipde_repository = "IkerPlays/IPDE"
