@@ -85,6 +85,9 @@
 #define IPDE_VERSION_DISPLAY "IPDE v." IPDE_VERSION_NUMBER
 // Example: "IPDE v.0.1.0 (devbuild)"
 #define IPDE_VERSION_FULL_NAME IPDE_VERSION_DISPLAY " (" IPDE_VERSION_CHANNEL ")"
+// Export templates version (folder name and version.txt in the .tpz), unique per IPDE version.
+// Example: "4.8.beta.ipde-0.2.0"
+#define IPDE_TEMPLATES_VERSION GODOT_VERSION_FULL_CONFIG ".ipde-" IPDE_VERSION_NUMBER
 #define IPDE_VERSION_HEX (0x10000 * IPDE_VERSION_MAJOR + 0x100 * IPDE_VERSION_MINOR + IPDE_VERSION_PATCH)
 
 // Git commit hash, generated at build time in `core/version_hash.gen.cpp`.
