@@ -23305,3 +23305,75 @@ msgstr "IPDE se basa en una serie de librerías libres y de código abierto de t
 
 msgid "Welcome to IPDE"
 msgstr "Bienvenido a IPDE"
+
+msgid "IPDE Project Pack"
+msgstr "Paquete de proyectos de IPDE"
+
+msgid "Export the project resources as a PCK or ZIP package. This is not a playable build, only the project data without a IPDE executable."
+msgstr "Exportar los recursos del proyecto como un paquete PCK o ZIP. Esto no es una compilación jugable, solo los datos del proyecto sin un ejecutable de IPDE."
+
+msgid "Export the project as a playable build (IPDE executable and project data) for the selected preset."
+msgstr "Exportar el proyecto como una compilación jugable (ejecutable de IPDE y datos del proyecto) para el ajuste seleccionado."
+
+msgid "Downloads are only available for the current engine version."
+msgstr "Las descargas solo están disponibles para la versión actual del motor."
+
+msgid "IPDE Export Templates"
+msgstr "Plantillas de exportación de IPDE"
+
+msgid "Engine Version"
+msgstr "Versión del motor"
+
+msgid "Engine Version List"
+msgstr "Lista de versiones del motor"
+
+msgid "IPDE Feature Profile"
+msgstr "Perfil de Características de IPDE"
+
+msgid "IPDE Physics (2D)"
+msgstr "Servidor de Física (2D)"
+
+msgid "IPDE Physics (3D)"
+msgstr "Servidor de Física (3D)"
+
+msgid "IPDE Physics backend (2D)."
+msgstr "Backend de Física de IPDE (2D)."
+
+msgid "IPDE Physics backend (3D)."
+msgstr "Backend de Física de IPDE (3D)."
+
+msgid "Open '%s' in the online documentation."
+msgstr "Abrir '%s' en la documentación en línea."
+
+msgid "Open the online documentation."
+msgstr "Abrir la documentación en línea."
+
+msgid "Memory in IPDE is either owned natively by the engine or owned by the ObjectDB."
+msgstr "La memoria en IPDE es o bien propiedad nativa del motor o bien propiedad de ObjectDB."
+
+msgid "Translated to '%s' in IPDE Shading Language."
+msgstr "Traducido a '%s' en IPDE Shading Language."
+
+msgid "Custom IPDE Shader Language expression, with custom amount of input and output ports. This is a direct injection of code into the vertex/fragment/light function, do not use it to write the function declarations inside."
+msgstr "Expresión personalizada del Lenguaje IPDE Shader, con cantidad personalizada de puertos de entrada y salida. Esta es una inyección directa de código en la función de vértice/fragmento/luz, no la uses para escribir las declaraciones de función en su interior."
+
+msgid "Custom IPDE Shader Language expression, which is placed on top of the resulted shader. You can place various function definitions inside and call it later in the Expressions. You can also declare varyings, parameters and constants."
+msgstr "Expresión personalizada en el lenguaje de shaders de IPDE, que se coloca al inicio del shader resultante. Puedes definir varias funciones dentro y llamarlas más tarde en las Expresiones. También puedes declarar varyings, parámetros y constantes."
+
+msgid "\"Min SDK\" cannot be lower than %d, which is the version needed by the IPDE library."
+msgstr "«Min SDK» no puede ser inferior a %d, que es la versión que necesita la librería de IPDE."
+
+msgid "The selected project \"%s\" does not specify its supported engine version in its configuration file (\"project.godot\").\n\nProject path: %s\n\nIf you proceed with opening it, it will be converted to the current configuration file format.\n\nWarning: You won't be able to open the project with previous versions of the engine anymore."
+msgstr "El proyecto seleccionado \"%s\" no especifica la versión del motor soportada en su archivo de configuración (\"project.godot\").\n\nRuta del proyecto: %s\n\nSi procedes a abrirlo, se convertirá al formato de fichero de configuración actual.\n\nAdvertencia: Ya no podrás abrir el proyecto con versiones anteriores del motor."
+
+msgid "What's New in %s"
+msgstr "Novedades de %s"
+
+msgid "IPDE has been updated to %s (%s)."
+msgstr "IPDE se ha actualizado a %s (%s)."
+
+msgid "%s (%s) is available. Install it from Help > IPDE Versions & Updates."
+msgstr "%s (%s) está disponible. Instálala desde Ayuda > Versiones y actualizaciones de IPDE."
+
+msgid "Great!"
+msgstr "¡Genial!"

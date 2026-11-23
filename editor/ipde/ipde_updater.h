@@ -118,6 +118,8 @@ private:
 	ConfirmationDialog *install_confirm_dialog = nullptr;
 	int install_confirm_release = -1;
 	ConfirmationDialog *restart_dialog = nullptr;
+	AcceptDialog *whats_new_dialog = nullptr;
+	RichTextLabel *whats_new_text = nullptr;
 	AcceptDialog *error_dialog = nullptr;
 
 	static int64_t _get_current_sort_key();
@@ -134,6 +136,8 @@ private:
 	void _fetch_releases(bool p_automatic);
 	void _releases_request_completed(int p_result, int p_response_code, const PackedStringArray &p_headers, const PackedByteArray &p_body);
 	void _check_for_prompt();
+	void _check_whats_new();
+	void _notify_available_update();
 	void _set_status(const String &p_text, bool p_error = false);
 
 	void _prompt_confirmed();

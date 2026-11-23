@@ -45,6 +45,7 @@
 #include "editor/editor_node.h"
 #include "editor/editor_string_names.h"
 #include "editor/file_system/editor_paths.h"
+#include "editor/gui/editor_toaster.h"
 #include "editor/settings/editor_settings.h"
 #include "editor/themes/editor_scale.h"
 #include "scene/gui/box_container.h"
@@ -336,7 +337,13 @@ void IPDEUpdater::_releases_request_completed(int p_result, int p_response_code,
 
 	_update_release_tree();
 	if (fetch_is_automatic) {
-		_check_for_prompt();
+		_check_whats_new();
+		if (!whats_new_dialog->is_visible()) {
+			_check_for_prompt();
+			if (!prompt_dialog->is_visible()) {
+				_notify_available_update();
+			}
+		}
 	}
 }
 
@@ -385,6 +392,52 @@ void IPDEUpdater::_check_for_prompt() {
 	prompt_text->add_text(TTR("Do you want to update now?"));
 	prompt_text->pop();
 	prompt_dialog->popup_centered(Size2(560, 320) * EDSCALE);
+}
+
+void IPDEUpdater::_check_whats_new() {
+	// Show the release notes once, the first time a new IPDE version runs.
+	const String current = IPDE_VERSION_FULL_NAME;
+	const String last = _get_config_value("last_run_version", "");
+	_set_config_value("last_run_version", current);
+	if (last.is_empty() || last == current) {
+		return;
+	}
+	const int64_t current_key = _get_current_sort_key();
+	for (const Release &r : releases) {
+		if (r.get_sort_key() != current_key) {
+			continue;
+		}
+		whats_new_dialog->set_title(vformat(TTR("What's New in %s"), r.get_display_name()));
+		whats_new_text->clear();
+		whats_new_text->push_bold();
+		whats_new_text->add_text(vformat(TTR("IPDE has been updated to %s (%s)."), r.get_display_name(), r.stable ? TTR("Stable") : TTR("DevBuild")));
+		whats_new_text->pop();
+		whats_new_text->add_newline();
+		whats_new_text->add_newline();
+		whats_new_text->add_text(r.body.is_empty() ? TTR("No release notes.") : r.body);
+		whats_new_dialog->popup_centered(Size2(560, 360) * EDSCALE);
+		return;
+	}
+}
+
+void IPDEUpdater::_notify_available_update() {
+	// Non-intrusive notice for updates that don't trigger the startup prompt
+	// (e.g. newer devbuilds when using a devbuild).
+	const int64_t current = _get_current_sort_key();
+	const bool on_devbuild = String(IPDE_VERSION_CHANNEL) != "stable";
+	for (const Release &r : releases) {
+		if (r.get_sort_key() <= current) {
+			break;
+		}
+		if (!r.stable && !on_devbuild) {
+			continue;
+		}
+		const String text = vformat(TTR("%s (%s) is available. Install it from Help > IPDE Versions & Updates."), r.get_display_name(), r.stable ? TTR("Stable") : TTR("DevBuild"));
+		if (EditorToaster::get_singleton()) {
+			EditorToaster::get_singleton()->popup_str(text, EditorToaster::SEVERITY_INFO);
+		}
+		return;
+	}
 }
 
 void IPDEUpdater::_set_status(const String &p_text, bool p_error) {
@@ -1108,6 +1161,15 @@ IPDEUpdater::IPDEUpdater(Context p_context) {
 	restart_dialog->set_cancel_button_text(TTR("Later"));
 	add_child(restart_dialog);
 	restart_dialog->connect(SceneStringName(confirmed), callable_mp(this, &IPDEUpdater::_restart_confirmed));
+
+	whats_new_dialog = memnew(AcceptDialog);
+	whats_new_dialog->set_ok_button_text(TTR("Great!"));
+	whats_new_text = memnew(RichTextLabel);
+	whats_new_text->set_selection_enabled(true);
+	whats_new_text->set_custom_minimum_size(Size2(520, 260) * EDSCALE);
+	whats_new_text->set_v_size_flags(Control::SIZE_EXPAND_FILL);
+	whats_new_dialog->add_child(whats_new_text);
+	add_child(whats_new_dialog);
 
 	error_dialog = memnew(AcceptDialog);
 	error_dialog->set_title(TTR("IPDE Updater"));
