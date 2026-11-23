@@ -351,6 +351,7 @@ private:
 	ColorPickerButton *environ_ground_color = nullptr;
 	EditorSpinSlider *environ_energy = nullptr;
 	Button *environ_ao_button = nullptr;
+	Button *environ_ssr_button = nullptr;
 	Button *environ_glow_button = nullptr;
 	Button *environ_tonemap_button = nullptr;
 	Button *environ_gi_button = nullptr;
@@ -418,6 +419,7 @@ private:
 	void _environ_set_ground_color(const Color &p_color);
 	void _environ_set_sky_energy(float p_energy);
 	void _environ_set_ao();
+	void _environ_set_ssr();
 	void _environ_set_glow();
 	void _environ_set_tonemap();
 	void _environ_set_gi();

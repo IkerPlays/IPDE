@@ -23389,3 +23389,12 @@ msgstr "%s se ha instalado automáticamente. Se usará la próxima vez que abras
 
 msgid "The automatic update failed. You can retry from Help > IPDE Versions & Updates."
 msgstr "La actualización automática ha fallado. Puedes reintentarlo desde Ayuda > Versiones y actualizaciones de IPDE."
+
+msgid "Reflections"
+msgstr "Reflejos"
+
+msgid "Screen-space reflections (Forward+ renderer only)."
+msgstr "Reflejos en espacio de pantalla (solo con el renderizador Forward+)."
+
+msgid "Set Preview Environment Reflections"
+msgstr "Cambiar reflejos del entorno de vista previa"

@@ -416,6 +416,7 @@ Dictionary Node3DEditor::get_state() const {
 		pd["environ_glow_enabled"] = environ_glow_button->is_pressed();
 		pd["environ_tonemap_enabled"] = environ_tonemap_button->is_pressed();
 		pd["environ_ao_enabled"] = environ_ao_button->is_pressed();
+		pd["environ_ssr_enabled"] = environ_ssr_button->is_pressed();
 		pd["environ_gi_enabled"] = environ_gi_button->is_pressed();
 		pd["sun_shadow_max_distance"] = sun_shadow_max_distance->get_value();
 
@@ -575,6 +576,9 @@ void Node3DEditor::set_state(const Dictionary &p_state) {
 		environ_glow_button->set_pressed_no_signal(pd["environ_glow_enabled"]);
 		environ_tonemap_button->set_pressed_no_signal(pd["environ_tonemap_enabled"]);
 		environ_ao_button->set_pressed_no_signal(pd["environ_ao_enabled"]);
+		if (pd.has("environ_ssr_enabled")) {
+			environ_ssr_button->set_pressed_no_signal(pd["environ_ssr_enabled"]);
+		}
 		environ_gi_button->set_pressed_no_signal(pd["environ_gi_enabled"]);
 		sun_shadow_max_distance->set_value_no_signal(pd["sun_shadow_max_distance"]);
 
@@ -3117,6 +3121,7 @@ void Node3DEditor::_preview_settings_changed() {
 		sky_material->set_ground_horizon_color(hz_color);
 
 		environment->set_ssao_enabled(environ_ao_button->is_pressed());
+		environment->set_ssr_enabled(environ_ssr_button->is_pressed());
 		environment->set_glow_enabled(environ_glow_button->is_pressed());
 		environment->set_sdfgi_enabled(environ_gi_button->is_pressed());
 		environment->set_tonemapper(environ_tonemap_button->is_pressed() ? Environment::TONE_MAPPER_FILMIC : Environment::TONE_MAPPER_LINEAR);
@@ -3142,6 +3147,8 @@ void Node3DEditor::_load_default_preview_settings() {
 	environ_energy->set_value_no_signal(1.0);
 	if (OS::get_singleton()->get_current_rendering_method() != "gl_compatibility" && OS::get_singleton()->get_current_rendering_method() != "dummy") {
 		environ_glow_button->set_pressed_no_signal(true);
+		// IPDE: screen-space reflections on by default (Forward+ only, ignored elsewhere).
+		environ_ssr_button->set_pressed_no_signal(true);
 	}
 	environ_tonemap_button->set_pressed_no_signal(false);
 	environ_ao_button->set_pressed_no_signal(false);
@@ -3316,6 +3323,16 @@ void Node3DEditor::_environ_set_ao() {
 	undo_redo->create_action(TTR("Set Preview Environment Ambient Occlusion"));
 	undo_redo->add_do_method(environ_ao_button, "set_pressed", environ_ao_button->is_pressed());
 	undo_redo->add_undo_method(environ_ao_button, "set_pressed", !environ_ao_button->is_pressed());
+	undo_redo->add_do_method(this, "_preview_settings_changed");
+	undo_redo->add_undo_method(this, "_preview_settings_changed");
+	undo_redo->commit_action();
+}
+
+void Node3DEditor::_environ_set_ssr() {
+	EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
+	undo_redo->create_action(TTR("Set Preview Environment Reflections"));
+	undo_redo->add_do_method(environ_ssr_button, "set_pressed", environ_ssr_button->is_pressed());
+	undo_redo->add_undo_method(environ_ssr_button, "set_pressed", !environ_ssr_button->is_pressed());
 	undo_redo->add_do_method(this, "_preview_settings_changed");
 	undo_redo->add_undo_method(this, "_preview_settings_changed");
 	undo_redo->commit_action();
@@ -4076,6 +4093,13 @@ void fragment() {
 		environ_ao_button->set_toggle_mode(true);
 		environ_ao_button->connect(SceneStringName(pressed), callable_mp(this, &Node3DEditor::_environ_set_ao), CONNECT_DEFERRED);
 		fx_vb->add_child(environ_ao_button);
+		environ_ssr_button = memnew(Button);
+		environ_ssr_button->set_text(TTRC("Reflections"));
+		environ_ssr_button->set_tooltip_text(TTRC("Screen-space reflections (Forward+ renderer only)."));
+		environ_ssr_button->set_h_size_flags(SIZE_EXPAND_FILL);
+		environ_ssr_button->set_toggle_mode(true);
+		environ_ssr_button->connect(SceneStringName(pressed), callable_mp(this, &Node3DEditor::_environ_set_ssr), CONNECT_DEFERRED);
+		fx_vb->add_child(environ_ssr_button);
 		environ_glow_button = memnew(Button);
 		environ_glow_button->set_text(TTRC("Glow"));
 		environ_glow_button->set_h_size_flags(SIZE_EXPAND_FILL);

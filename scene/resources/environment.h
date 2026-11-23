@@ -122,7 +122,7 @@ private:
 
 	// SSR
 	bool ssr_enabled = false;
-	int ssr_max_steps = 64;
+	int ssr_max_steps = 96;
 	float ssr_fade_in = 0.15;
 	float ssr_fade_out = 2.0;
 	float ssr_depth_tolerance = 0.5;
