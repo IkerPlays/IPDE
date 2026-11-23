@@ -1324,6 +1324,9 @@
 			A touch-friendly panel that provides easy access to common actions such as save, delete, undo, and redo without requiring a keyboard.
 			[b]Note:[/b] Only available in the Android and XR editor.
 		</member>
+		<member name="ipde/updates/auto_install" type="bool" setter="" getter="">
+			If [code]true[/code], newer IPDE versions are downloaded and installed automatically without asking. Stable installs update to newer stables, devbuild installs update to the newest release. The project manager restarts into the new version right away; the editor uses it the next time it starts. Not available on Android and Web, where the update is offered instead.
+		</member>
 		<member name="ipde/updates/check_on_startup" type="bool" setter="" getter="">
 			If [code]true[/code], IPDE checks GitHub Releases for a newer stable version when the project manager or the editor starts, and asks whether to update.
 		</member>

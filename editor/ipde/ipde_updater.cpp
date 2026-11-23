@@ -338,12 +338,69 @@ void IPDEUpdater::_releases_request_completed(int p_result, int p_response_code,
 	_update_release_tree();
 	if (fetch_is_automatic) {
 		_check_whats_new();
+		if (_try_auto_install()) {
+			return;
+		}
 		if (!whats_new_dialog->is_visible()) {
 			_check_for_prompt();
 			if (!prompt_dialog->is_visible()) {
 				_notify_available_update();
 			}
 		}
+	}
+}
+
+bool IPDEUpdater::_try_auto_install() {
+	// Silent automatic updates: download and install without asking.
+	// Android needs the user to confirm the APK install, so it keeps using the prompt.
+#if defined(ANDROID_ENABLED) || defined(WEB_ENABLED)
+	return false;
+#else
+	if (EditorSettings::get_singleton()->has_setting("ipde/updates/auto_install") && !bool(EDITOR_GET("ipde/updates/auto_install"))) {
+		return false;
+	}
+	// Installs follow their channel: stables update to stables, devbuilds to the newest release.
+	const bool on_devbuild = String(IPDE_VERSION_CHANNEL) != "stable";
+	const bool notify_devbuilds = EditorSettings::get_singleton()->has_setting("ipde/updates/notify_devbuilds") && bool(EDITOR_GET("ipde/updates/notify_devbuilds"));
+	const int64_t current = _get_current_sort_key();
+	for (int i = 0; i < releases.size(); i++) {
+		const Release &r = releases[i];
+		if (r.get_sort_key() <= current) {
+			break;
+		}
+		if (!r.stable && !on_devbuild && !notify_devbuilds) {
+			continue;
+		}
+		if (!_get_platform_asset(r)) {
+			continue;
+		}
+		// Loop guard: if this release was auto-installed moments ago and we're still on an older
+		// version, the package is probably wrong. Fall back to the manual flow.
+		const double now = Time::get_singleton()->get_unix_time_from_system();
+		if (String(_get_config_value("auto_installed_tag", "")) == r.tag && now - double(_get_config_value("auto_installed_time", 0.0)) < 600.0) {
+			WARN_PRINT("IPDE: skipping automatic update to " + r.tag + ", it was already installed but the version didn't change.");
+			return false;
+		}
+		_set_config_value("auto_installed_tag", r.tag);
+		_set_config_value("auto_installed_time", now);
+		auto_installing = true;
+		_auto_update_message(vformat(TTR("Updating IPDE to %s..."), r.get_display_name()));
+		_start_install(i);
+		if (installing_release < 0) {
+			auto_installing = false;
+			return false;
+		}
+		return true;
+	}
+	return false;
+#endif
+}
+
+void IPDEUpdater::_auto_update_message(const String &p_text, bool p_error) {
+	emit_signal(SNAME("auto_update_status"), p_text);
+	_set_status(p_text, p_error);
+	if (EditorToaster::get_singleton()) {
+		EditorToaster::get_singleton()->popup_str(p_text, p_error ? EditorToaster::SEVERITY_WARNING : EditorToaster::SEVERITY_INFO);
 	}
 }
 
@@ -733,6 +790,19 @@ void IPDEUpdater::_download_completed(int p_result, int p_response_code, const P
 	}
 	DirAccess::remove_absolute(download_path);
 
+	if (auto_installing) {
+		auto_installing = false;
+		if (context == CONTEXT_PROJECT_MANAGER) {
+			// Nothing to save in the project manager: restart into the new version right away.
+			_auto_update_message(vformat(TTR("%s installed. Restarting..."), r.get_display_name()));
+			callable_mp(this, &IPDEUpdater::_restart_confirmed).call_deferred();
+		} else {
+			// Don't interrupt the user's work: the new version is used the next time IPDE starts.
+			_auto_update_message(vformat(TTR("%s has been installed automatically. It will be used the next time you open IPDE."), r.get_display_name()));
+		}
+		return;
+	}
+
 	_set_status(vformat(TTR("%s installed. Restart IPDE to use it."), r.get_display_name()));
 	restart_dialog->set_text(vformat(TTR("%s (%s) has been installed.\n\nRestart IPDE now?"), r.get_display_name(), r.stable ? TTR("Stable") : TTR("DevBuild")));
 	_popup_dialog(restart_dialog);
@@ -991,6 +1061,13 @@ void IPDEUpdater::_popup_dialog(AcceptDialog *p_dialog) {
 }
 
 void IPDEUpdater::_show_error(const String &p_text) {
+	if (auto_installing) {
+		// Automatic updates fail silently (just a notice); the user can retry from the version manager.
+		auto_installing = false;
+		WARN_PRINT("IPDE automatic update failed: " + p_text);
+		_auto_update_message(TTR("The automatic update failed. You can retry from Help > IPDE Versions & Updates."), true);
+		return;
+	}
 	error_dialog->set_text(p_text);
 	_popup_dialog(error_dialog);
 }
@@ -1037,6 +1114,7 @@ void IPDEUpdater::_notification(int p_what) {
 
 void IPDEUpdater::_bind_methods() {
 	ADD_SIGNAL(MethodInfo("releases_updated", PropertyInfo(Variant::STRING, "newest_available")));
+	ADD_SIGNAL(MethodInfo("auto_update_status", PropertyInfo(Variant::STRING, "text")));
 }
 
 IPDEUpdater::IPDEUpdater(Context p_context) {

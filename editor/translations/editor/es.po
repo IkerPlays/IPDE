@@ -23377,3 +23377,15 @@ msgstr "%s (%s) está disponible. Instálala desde Ayuda > Versiones y actualiza
 
 msgid "Great!"
 msgstr "¡Genial!"
+
+msgid "Updating IPDE to %s..."
+msgstr "Actualizando IPDE a %s..."
+
+msgid "%s installed. Restarting..."
+msgstr "%s instalada. Reiniciando..."
+
+msgid "%s has been installed automatically. It will be used the next time you open IPDE."
+msgstr "%s se ha instalado automáticamente. Se usará la próxima vez que abras IPDE."
+
+msgid "The automatic update failed. You can retry from Help > IPDE Versions & Updates."
+msgstr "La actualización automática ha fallado. Puedes reintentarlo desde Ayuda > Versiones y actualizaciones de IPDE."

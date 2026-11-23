@@ -526,6 +526,11 @@ void ProjectManager::_ipde_releases_updated(const String &p_newest) {
 	}
 }
 
+void ProjectManager::_ipde_auto_update_status(const String &p_text) {
+	ipde_update_link->set_text(p_text);
+	ipde_update_link->add_theme_color_override(SceneStringName(font_color), get_theme_color(SNAME("accent_color"), EditorStringName(Editor)));
+}
+
 void ProjectManager::_restart_confirmed() {
 	List<String> args = OS::get_singleton()->get_cmdline_args();
 	Error err = OS::get_singleton()->create_instance(args);
@@ -1911,6 +1916,7 @@ ProjectManager::ProjectManager() {
 		ipde_update_link->set_underline_mode(LinkButton::UNDERLINE_MODE_ON_HOVER);
 		ipde_update_link->connect(SceneStringName(pressed), callable_mp(ipde_updater, &IPDEUpdater::show_version_manager));
 		ipde_updater->connect("releases_updated", callable_mp(this, &ProjectManager::_ipde_releases_updated));
+		ipde_updater->connect("auto_update_status", callable_mp(this, &ProjectManager::_ipde_auto_update_status));
 		footer_bar->add_child(ipde_update_link);
 
 		EditorVersionButton *version_btn = memnew(EditorVersionButton(EditorVersionButton::FORMAT_WITH_BUILD));

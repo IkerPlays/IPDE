@@ -137,6 +137,9 @@ private:
 	void _releases_request_completed(int p_result, int p_response_code, const PackedStringArray &p_headers, const PackedByteArray &p_body);
 	void _check_for_prompt();
 	void _check_whats_new();
+	bool _try_auto_install();
+	void _auto_update_message(const String &p_text, bool p_error = false);
+	bool auto_installing = false;
 	void _notify_available_update();
 	void _set_status(const String &p_text, bool p_error = false);
 

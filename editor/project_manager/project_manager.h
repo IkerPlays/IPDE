@@ -141,6 +141,7 @@ class ProjectManager : public Control {
 	TextureRect *empty_list_logo = nullptr;
 	Label *empty_list_title = nullptr;
 	void _ipde_releases_updated(const String &p_newest);
+	void _ipde_auto_update_status(const String &p_text);
 	void _restart_confirmed();
 
 	// Project list.
