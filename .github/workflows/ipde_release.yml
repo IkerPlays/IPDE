@@ -54,6 +54,11 @@ env:
     target=editor
     debug_symbols=no
     redirect_build_objects=no
+  # Export templates (the engine that runs exported games).
+  TEMPLATE_FLAGS: >-
+    debug_symbols=no
+    redirect_build_objects=no
+  EM_VERSION: 6.0.12
 
 jobs:
   prepare:
@@ -339,10 +344,284 @@ jobs:
           path: ${{ needs.prepare.outputs.base }}_android_editor.apk
           retention-days: 7
 
+  # ---------------------------------------------------------------------------
+  # Export templates, packaged as IPDE_vX.Y.Z_export_templates.tpz. The editor's
+  # export template manager downloads them from the release.
+  # ---------------------------------------------------------------------------
+
+  templates-linux:
+    name: 📦 Templates Linux
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Setup dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwayland-bin
+      - name: Restore build cache
+        uses: ./.github/actions/godot-cache-restore
+        with:
+          cache-name: ipde-templates-linux
+        continue-on-error: true
+      - uses: ./.github/actions/godot-deps
+      - name: Download pre-built AccessKit
+        id: accesskit-sdk
+        shell: sh
+        run: |
+          if python ./misc/scripts/install_accesskit.py; then echo "ACCESSKIT=yes" >> "$GITHUB_OUTPUT"; else echo "ACCESSKIT=no" >> "$GITHUB_OUTPUT"; fi
+      - name: Compilation
+        run: |
+          for t in template_debug template_release; do
+            scons platform=linuxbsd arch=x86_64 target=$t $TEMPLATE_FLAGS accesskit=${{ steps.accesskit-sdk.outputs.ACCESSKIT }} "cache_path=${{ github.workspace }}/.scons_cache/"
+          done
+      - name: Save build cache
+        uses: ./.github/actions/godot-cache-save
+        with:
+          cache-name: ipde-templates-linux
+        continue-on-error: true
+      - name: Collect
+        run: |
+          mkdir -p tpl
+          cp bin/godot.linuxbsd.template_debug.x86_64 tpl/linux_debug.x86_64
+          cp bin/godot.linuxbsd.template_release.x86_64 tpl/linux_release.x86_64
+          strip tpl/*
+          chmod +x tpl/*
+      - uses: actions/upload-artifact@v7
+        with:
+          name: tpl-linux
+          path: tpl/*
+          retention-days: 7
+
+  templates-windows:
+    name: 📦 Templates Windows
+    needs: prepare
+    runs-on: windows-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Restore build cache
+        uses: ./.github/actions/godot-cache-restore
+        with:
+          cache-name: ipde-templates-windows
+        continue-on-error: true
+      - uses: ./.github/actions/godot-deps
+      - name: Download SDKs (Direct3D 12, ANGLE, AccessKit)
+        id: sdks
+        shell: sh
+        run: |
+          if python ./misc/scripts/install_d3d12_sdk_windows.py; then echo "D3D12=yes" >> "$GITHUB_OUTPUT"; else echo "D3D12=no" >> "$GITHUB_OUTPUT"; fi
+          if python ./misc/scripts/install_angle.py; then echo "ANGLE=yes" >> "$GITHUB_OUTPUT"; else echo "ANGLE=no" >> "$GITHUB_OUTPUT"; fi
+          if python ./misc/scripts/install_accesskit.py; then echo "ACCESSKIT=yes" >> "$GITHUB_OUTPUT"; else echo "ACCESSKIT=no" >> "$GITHUB_OUTPUT"; fi
+      - name: Compilation
+        shell: sh
+        run: |
+          for t in template_debug template_release; do
+            scons platform=windows target=$t $TEMPLATE_FLAGS d3d12=${{ steps.sdks.outputs.D3D12 }} angle=${{ steps.sdks.outputs.ANGLE }} accesskit=${{ steps.sdks.outputs.ACCESSKIT }} "cache_path=${{ github.workspace }}/.scons_cache/"
+          done
+          ls -l bin/
+      - name: Save build cache
+        uses: ./.github/actions/godot-cache-save
+        with:
+          cache-name: ipde-templates-windows
+        continue-on-error: true
+      - name: Collect
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path tpl | Out-Null
+          foreach ($t in @("debug", "release")) {
+            Copy-Item "bin/godot.windows.template_$t.x86_64.exe" "tpl/windows_$($t)_x86_64.exe"
+            if (Test-Path "bin/godot.windows.template_$t.x86_64.console.exe") {
+              Copy-Item "bin/godot.windows.template_$t.x86_64.console.exe" "tpl/windows_$($t)_x86_64_console.exe"
+            }
+          }
+      - uses: actions/upload-artifact@v7
+        with:
+          name: tpl-windows
+          path: tpl/*
+          retention-days: 7
+
+  templates-macos:
+    name: 📦 Templates macOS
+    needs: prepare
+    runs-on: macos-26
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Restore build cache
+        uses: ./.github/actions/godot-cache-restore
+        with:
+          cache-name: ipde-templates-macos
+        continue-on-error: true
+      - uses: ./.github/actions/godot-deps
+      - name: Download SDKs (Vulkan, ANGLE, AccessKit)
+        id: sdks
+        run: |
+          if sh misc/scripts/install_vulkan_sdk_macos.sh; then echo "VULKAN=yes" >> "$GITHUB_OUTPUT"; else echo "VULKAN=no" >> "$GITHUB_OUTPUT"; fi
+          if python3 ./misc/scripts/install_angle.py; then echo "ANGLE=yes" >> "$GITHUB_OUTPUT"; else echo "ANGLE=no" >> "$GITHUB_OUTPUT"; fi
+          if python3 ./misc/scripts/install_accesskit.py; then echo "ACCESSKIT=yes" >> "$GITHUB_OUTPUT"; else echo "ACCESSKIT=no" >> "$GITHUB_OUTPUT"; fi
+      - name: Compilation
+        run: |
+          for t in template_debug template_release; do
+            scons platform=macos arch=x86_64 target=$t $TEMPLATE_FLAGS vulkan=${{ steps.sdks.outputs.VULKAN }} angle=${{ steps.sdks.outputs.ANGLE }} accesskit=${{ steps.sdks.outputs.ACCESSKIT }} metal=no "cache_path=${{ github.workspace }}/.scons_cache/"
+            scons platform=macos arch=arm64 target=$t $TEMPLATE_FLAGS vulkan=${{ steps.sdks.outputs.VULKAN }} angle=${{ steps.sdks.outputs.ANGLE }} accesskit=${{ steps.sdks.outputs.ACCESSKIT }} "cache_path=${{ github.workspace }}/.scons_cache/"
+          done
+          ls -l bin/
+      - name: Save build cache
+        uses: ./.github/actions/godot-cache-save
+        with:
+          cache-name: ipde-templates-macos
+        continue-on-error: true
+      - name: Collect
+        run: |
+          mkdir -p tpl
+          cp -R misc/dist/macos_template.app macos_template.app
+          mkdir -p macos_template.app/Contents/MacOS
+          for t in debug release; do
+            lipo -create bin/godot.macos.template_$t.x86_64 bin/godot.macos.template_$t.arm64 -output macos_template.app/Contents/MacOS/godot_macos_$t.universal
+          done
+          strip macos_template.app/Contents/MacOS/*
+          chmod +x macos_template.app/Contents/MacOS/*
+          zip -q -9 -r tpl/macos.zip macos_template.app
+      - uses: actions/upload-artifact@v7
+        with:
+          name: tpl-macos
+          path: tpl/*
+          retention-days: 7
+
+  templates-android:
+    name: 📦 Templates Android
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Restore build cache
+        uses: ./.github/actions/godot-cache-restore
+        with:
+          cache-name: ipde-templates-android
+        continue-on-error: true
+      - uses: ./.github/actions/godot-deps
+      - name: Compilation
+        run: |
+          for t in template_debug template_release; do
+            for a in arm32 arm64 x86_64; do
+              scons platform=android arch=$a target=$t $TEMPLATE_FLAGS "cache_path=${{ github.workspace }}/.scons_cache/"
+            done
+          done
+      - name: Save build cache
+        uses: ./.github/actions/godot-cache-save
+        with:
+          cache-name: ipde-templates-android
+        continue-on-error: true
+      - name: Generate templates
+        run: |
+          cd platform/android/java
+          ./gradlew generateGodotTemplates
+          cd ../../..
+          ls -l bin/
+          mkdir -p tpl
+          cp bin/android_debug.apk bin/android_release.apk bin/android_source.zip tpl/
+      - uses: actions/upload-artifact@v7
+        with:
+          name: tpl-android
+          path: tpl/*
+          retention-days: 7
+
+  templates-web:
+    name: 📦 Templates Web
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - uses: emscripten-core/setup-emsdk@v16
+        with:
+          version: ${{ env.EM_VERSION }}
+          no-cache: true
+      - name: Restore build cache
+        uses: ./.github/actions/godot-cache-restore
+        with:
+          cache-name: ipde-templates-web
+        continue-on-error: true
+      - uses: ./.github/actions/godot-deps
+      - name: Compilation
+        run: |
+          for t in template_debug template_release; do
+            scons platform=web target=$t threads=no $TEMPLATE_FLAGS "cache_path=${{ github.workspace }}/.scons_cache/"
+            scons platform=web target=$t threads=yes $TEMPLATE_FLAGS "cache_path=${{ github.workspace }}/.scons_cache/"
+          done
+          ls -l bin/
+      - name: Save build cache
+        uses: ./.github/actions/godot-cache-save
+        with:
+          cache-name: ipde-templates-web
+        continue-on-error: true
+      - name: Collect
+        run: |
+          mkdir -p tpl
+          for t in debug release; do
+            cp bin/godot.web.template_$t.wasm32.nothreads.zip tpl/web_nothreads_$t.zip
+            cp bin/godot.web.template_$t.wasm32.zip tpl/web_$t.zip
+          done
+      - uses: actions/upload-artifact@v7
+        with:
+          name: tpl-web
+          path: tpl/*
+          retention-days: 7
+
+  templates:
+    name: 📦 Package export templates
+    needs: [prepare, templates-linux, templates-windows, templates-macos, templates-android, templates-web]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: tpl-*
+          path: templates
+          merge-multiple: true
+      - name: Create .tpz
+        run: |
+          # Must match IPDE_TEMPLATES_VERSION in core/version.h ("<godot version>.ipde-<ipde version>").
+          VERSION="${IPDE_VERSION#v}"
+          VERSION="${VERSION#.}"
+          python3 - "$VERSION" > templates/version.txt <<'PY'
+          import sys
+          v = {}
+          exec(open("version.py").read(), v)
+          number = f"{v['major']}.{v['minor']}" + (f".{v['patch']}" if v["patch"] else "")
+          print(f"{number}.{v['status']}{v['module_config']}.ipde-{sys.argv[1]}")
+          PY
+          cat templates/version.txt
+          ls -l templates
+          zip -q -r "${{ needs.prepare.outputs.base }}_export_templates.tpz" templates
+          ls -l *.tpz
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-templates
+          path: ${{ needs.prepare.outputs.base }}_export_templates.tpz
+          retention-days: 7
+
   publish:
     name: 📦 Publish release
-    needs: [prepare, linux, windows, macos, android]
-    if: ${{ always() && needs.prepare.result == 'success' && needs.linux.result == 'success' && needs.windows.result == 'success' && needs.macos.result == 'success' && needs.android.result != 'failure' && needs.android.result != 'cancelled' }}
+    needs: [prepare, linux, windows, macos, android, templates]
+    if: ${{ always() && needs.prepare.result == 'success' && needs.linux.result == 'success' && needs.windows.result == 'success' && needs.macos.result == 'success' && needs.templates.result == 'success' && needs.android.result != 'failure' && needs.android.result != 'cancelled' }}
     runs-on: ubuntu-24.04
     steps:
       - name: Download builds
