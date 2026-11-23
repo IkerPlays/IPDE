@@ -700,7 +700,7 @@ void ProjectManager::_open_selected_projects_check_warnings() {
 
 	// Check if the config_version property was empty or 0.
 	if (config_version == 0) {
-		ask_update_label->set_text(vformat(TTR("The selected project \"%s\" does not specify its supported engine version in its configuration file (\"project.godot\").\n\nProject path: %s\n\nIf you proceed with opening it, it will be converted to Godot's current configuration file format.\n\nWarning: You won't be able to open the project with previous versions of the engine anymore."), project.project_name, project.path));
+		ask_update_label->set_text(vformat(TTR("The selected project \"%s\" does not specify its supported engine version in its configuration file (\"project.godot\").\n\nProject path: %s\n\nIf you proceed with opening it, it will be converted to the current configuration file format.\n\nWarning: You won't be able to open the project with previous versions of the engine anymore."), project.project_name, project.path));
 		ask_update_settings->popup_centered(popup_min_size);
 		return;
 	}
