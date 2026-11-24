@@ -188,7 +188,7 @@ static void draw_status(ImFont *p_font, const GameStatus &p_st, double p_now, in
 		if (p_has_next) {
 			snprintf(sub, sizeof(sub), "Tiempo: %.1f s   ·   Caídas: %d   ·   Siguiente nivel...", p_st.level_time, p_st.deaths);
 		} else {
-			snprintf(sub, sizeof(sub), "Tiempo: %.1f s   ·   Caídas: %d   ·   Esc para salir", p_st.level_time, p_st.deaths);
+			snprintf(sub, sizeof(sub), "Tiempo: %.1f s   ·   Caídas: %d   ·   R para jugar otra vez", p_st.level_time, p_st.deaths);
 		}
 		draw_banner(p_font, p_has_next ? "¡Nivel completado!" : "¡Juego completado!", sub, p_w, (float)p_h * 0.38f, IM_COL32(61, 220, 132, 255));
 	}
@@ -196,7 +196,7 @@ static void draw_status(ImFont *p_font, const GameStatus &p_st, double p_now, in
 
 static void draw_hud(ImFont *p_font, int p_score, int p_total, double p_time_all_collected, double p_now, int p_w) {
 	ImDrawList *fg = ImGui::GetForegroundDrawList();
-	fg->AddText(ImVec2(12, 10), IM_COL32(255, 255, 255, 140), "IPDE  ·  Esc para salir  ·  F3: estadísticas");
+	fg->AddText(ImVec2(12, 10), IM_COL32(255, 255, 255, 140), "Esc: pausa  ·  R: reiniciar  ·  F3: estadísticas");
 	if (p_total > 0) {
 		char buf[64];
 		snprintf(buf, sizeof(buf), "Monedas: %d / %d", p_score, p_total);
@@ -671,6 +671,9 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 	sprites.renderer = &renderer;
 	sprites.project_dir = project.path;
 
+	bool paused = false;
+	double pause_started = 0.0;
+
 	// Levels: the project's scenes are played in order.
 	size_t level = 0;
 	std::string current_music;
@@ -742,15 +745,89 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 		io.DeltaTime = std::max(1e-4f, dt);
 		ImGui::NewFrame();
 
-		if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+		if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+			paused = !paused;
+			if (paused) {
+				pause_started = now;
+			} else {
+				start += now - pause_started; // The game clock doesn't run while paused.
+			}
+		}
+		bool restart = !paused && ImGui::IsKeyPressed(ImGuiKey_R, false);
+		bool quit = false;
+		if (paused) {
+			// Pause menu.
+			ImGui::SetNextWindowPos(ImVec2(w * 0.5f, h * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+			ImGui::SetNextWindowSize(ImVec2(320, 0));
+			ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 14.0f);
+			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(22, 20));
+			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
+			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, 10));
+			ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(16, 17, 31, 235));
+			ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(44, 47, 80, 255));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(108, 123, 255, 255));
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(90, 104, 230, 255));
+			ImGui::Begin("##pause", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+			const char *title = "Pausa";
+			ImGui::PushFont(font, 34.0f);
+			ImGui::SetCursorPosX((ImGui::GetWindowWidth() - ImGui::CalcTextSize(title).x) * 0.5f);
+			ImGui::TextUnformatted(title);
+			ImGui::PopFont();
+			if (project.scenes.size() > 1) {
+				char lv[64];
+				snprintf(lv, sizeof(lv), "Nivel %zu de %zu", level + 1, project.scenes.size());
+				ImGui::SetCursorPosX((ImGui::GetWindowWidth() - ImGui::CalcTextSize(lv).x) * 0.5f);
+				ImGui::TextDisabled("%s", lv);
+			}
+			ImGui::Spacing();
+			if (ImGui::Button("Continuar", ImVec2(-1, 44))) {
+				paused = false;
+				start += now - pause_started;
+			}
+			if (ImGui::Button("Reiniciar nivel", ImVec2(-1, 44))) {
+				restart = true;
+			}
+			if (ImGui::Button("Salir", ImVec2(-1, 44))) {
+				quit = true;
+			}
+			ImGui::End();
+			ImGui::PopStyleColor(4);
+			ImGui::PopStyleVar(4);
+		}
+		if (quit) {
+			ImGui::EndFrame();
 			break;
 		}
+		if (restart) {
+			Scene again;
+			if (Scene::load(project.get_scene_path(project.scenes[level]), again)) {
+				paused = false;
+				start_level(level, std::move(again));
+				ImGui::EndFrame();
+				continue;
+			}
+		}
 		const double t = now - start;
-		g_fx.update(dt);
+		g_fx.update(paused ? 0.0f : dt);
+		// "Nivel N" title for a moment when a level starts (only in games with several levels).
+		auto draw_level_intro = [&]() {
+			if (project.scenes.size() < 2 || t > 1.8) {
+				return;
+			}
+			char title[32];
+			snprintf(title, sizeof(title), "Nivel %zu", level + 1);
+			const float a = (float)std::clamp((1.8 - t) / 0.5, 0.0, 1.0);
+			const float size = 64.0f;
+			const ImVec2 ts = font->CalcTextSizeA(size, FLT_MAX, 0, title);
+			const ImVec2 p(((float)w - ts.x) * 0.5f, (float)h * 0.3f);
+			ImDrawList *fg = ImGui::GetForegroundDrawList();
+			fg->AddText(font, size, ImVec2(p.x + 3, p.y + 3), IM_COL32(0, 0, 0, (int)(120 * a)), title);
+			fg->AddText(font, size, p, IM_COL32(255, 255, 255, (int)(255 * a)), title);
+		};
 		// Go to the next level a moment after reaching the goal.
 		{
 			const GameStatus &st = scene.is_3d ? game3d.status : status2d;
-			if (st.goal_time > 0 && t - st.goal_time > 2.5 && next_level_index() < project.scenes.size()) {
+			if (!paused && st.goal_time > 0 && t - st.goal_time > 2.5 && next_level_index() < project.scenes.size()) {
 				Scene next;
 				size_t index = next_level_index();
 				while (index < project.scenes.size() && !Scene::load(project.get_scene_path(project.scenes[index]), next)) {
@@ -768,9 +845,12 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 			show_stats = !show_stats;
 		}
 		if (scene.is_3d) {
-			game3d.update(dt, t);
+			if (!paused) {
+				game3d.update(dt, t);
+			}
 			draw_hud(font, game3d.score, game3d.total, game3d.all_collected_time, t, w);
 			draw_status(font, game3d.status, t, w, h, level + 1 < project.scenes.size());
+			draw_level_intro();
 			if (show_stats) {
 				char stats[128];
 				snprintf(stats, sizeof(stats), "%.0f FPS  ·  %.1f ms  ·  %d%%  ·  %zu tri", 1.0 / std::max(1e-6, frame_avg), frame_avg * 1000.0, (int)std::lround(render_scale * 100), game3d.renderer.get_triangle_count());
@@ -795,6 +875,7 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 			renderer.render(ImGui::GetDrawData());
 			platform::present(renderer.get_pixels(), w, h);
 		} else {
+			if (!paused) {
 			// Player movement with simple collisions against solid shapes.
 			// Top-down: WASD moves freely. Platformer: A/D walk, gravity pulls down, Space/W jumps.
 			float mx = 0, my = 0;
@@ -988,6 +1069,7 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 				}
 			}
 
+			} // !paused
 			// Camera: centered on the first entity with camera_follow, or on the world origin.
 			ImVec2 origin((float)w * 0.5f, (float)h * 0.5f);
 			for (const Entity &e : ents) {
@@ -1003,6 +1085,7 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 			}
 			draw_hud(font, score2d, total2d, all2d_time, t, w);
 			draw_status(font, status2d, t, w, h, level + 1 < project.scenes.size());
+			draw_level_intro();
 			ImGui::Render();
 			renderer.resize(w, h);
 			renderer.clear(scene.background);
