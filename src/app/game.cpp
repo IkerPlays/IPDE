@@ -300,6 +300,26 @@ static void fx2d_burst(float p_x, float p_y, uint32_t p_color, int p_count, floa
 	g_fx.burst(Vec3(p_x, p_y, 0), p_color | 0xFF000000, p_count, p_speed, 4.0f, 0.7f, 900.0f, true, p_up);
 }
 
+// Hides the doors once every coin has been collected. p_burst makes particles at a door.
+template <typename Burst>
+static void open_doors(std::vector<Entity> &r_entities, Burst p_burst) {
+	for (Entity &d : r_entities) {
+		if (d.door && d.visible) {
+			d.visible = false;
+			p_burst(d);
+		}
+	}
+}
+
+// Shows/hides the entities a switch points to.
+static void toggle_targets(std::vector<Entity> &r_entities, const std::string &p_name) {
+	for (Entity &e : r_entities) {
+		if (e.name == p_name) {
+			e.visible = !e.visible;
+		}
+	}
+}
+
 /* 3D game */
 
 struct Game3D {
@@ -519,18 +539,39 @@ struct Game3D {
 					fx3d_burst(SceneRenderer3D::entity_position(o, now, true), o.color, 26, 3.5f, 1.5f);
 					if (score == total) {
 						all_collected_time = now;
+						open_doors(scene.entities, [&](const Entity &d) { fx3d_burst(SceneRenderer3D::entity_position(d, now, true), d.color, 40, 4.0f, 1.0f); });
 					}
 				}
 			}
-			// Hazards and the goal.
-			for (const Entity &o : scene.entities) {
-				if (!o.visible || (!o.hazard && !o.goal)) {
+			// Hazards, checkpoints, switches and the goal.
+			for (Entity &o : scene.entities) {
+				if (!o.visible || (!o.hazard && !o.goal && !o.checkpoint && o.switch_target.empty())) {
 					continue;
 				}
-				if (pb.overlaps(entity_box(o, SceneRenderer3D::entity_position(o, now, true)))) {
+				// Slightly taller box so standing on a plate (switch, checkpoint) counts as touching it.
+				Box touch = pb;
+				touch.min.y -= 0.06f;
+				if (touch.overlaps(entity_box(o, SceneRenderer3D::entity_position(o, now, true)))) {
 					if (o.hazard) {
 						die(now);
 						break;
+					}
+					if (o.checkpoint || !o.switch_target.empty()) {
+						if (!o.triggered) {
+							o.triggered = true;
+							const Vec3 op = SceneRenderer3D::entity_position(o, now, true);
+							if (o.checkpoint) {
+								spawn = Vec3(p.x, p.y + 0.2f, p.z);
+								o.emission = std::max(o.emission, 1.2f); // Lights up when reached.
+								fx3d_burst(op, 0x5AC8FF, 30, 3.0f, 3.0f);
+								g_audio.play(&o, audio::sfx::coin(), 0.75f);
+							} else {
+								toggle_targets(scene.entities, o.switch_target);
+								fx3d_burst(op, o.color, 20, 2.5f, 1.0f);
+								g_audio.play(&o, audio::sfx::click());
+							}
+						}
+						continue;
 					}
 					status.goal_time = now;
 					status.level_time = now;
@@ -664,6 +705,8 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 	GameStatus status2d;
 	std::vector<Entity> initial2d;
 	float vel2d_y = 0.0f; // Platformer mode.
+	bool checkpoint2d = false;
+	float checkpoint2d_x = 0.0f, checkpoint2d_y = 0.0f;
 	bool on_ground2d = false;
 	int ground2d = -1;
 	double prev_t2d = 0.0;
@@ -705,6 +748,7 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 		on_ground2d = false;
 		ground2d = -1;
 		prev_t2d = 0.0;
+		checkpoint2d = false;
 		for (const Entity &e : ents) {
 			if (e.collectible && e.visible) {
 				total2d++;
@@ -1028,21 +1072,45 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 						fx2d_burst(ox, oy, o.color, 24, 260.0f, -150.0f);
 						if (score2d == total2d) {
 							all2d_time = t;
+							open_doors(ents, [&](const Entity &d) {
+								float dx, dy, dr;
+								entity_animated_transform(d, t, true, dx, dy, dr);
+								fx2d_burst(dx, dy, d.color, 40, 260.0f);
+							});
 						}
 					}
 				}
 				// Hazards and the goal.
 				bool died = false;
-				for (const Entity &o : ents) {
-					if (!o.visible || (!o.hazard && !o.goal) || &o == &p) {
+				for (Entity &o : ents) {
+					if (!o.visible || (!o.hazard && !o.goal && !o.checkpoint && o.switch_target.empty()) || &o == &p) {
 						continue;
 					}
 					float ox, oy, orot;
 					entity_animated_transform(o, t, true, ox, oy, orot);
-					if (pb.overlaps(entity_box(o, Vec3(ox, oy, 0)))) {
+					Box touch = pb; // A bit taller so standing on a plate counts as touching it.
+					touch.max.y += 2.0f;
+					if (touch.overlaps(entity_box(o, Vec3(ox, oy, 0)))) {
 						if (o.hazard) {
 							died = true;
 							break;
+						}
+						if (o.checkpoint || !o.switch_target.empty()) {
+							if (!o.triggered) {
+								o.triggered = true;
+								if (o.checkpoint) {
+									checkpoint2d = true;
+									checkpoint2d_x = p.x;
+									checkpoint2d_y = p.y;
+									fx2d_burst(ox, oy, 0x5AC8FF, 30, 240.0f, -150.0f);
+									g_audio.play(&o, audio::sfx::coin(), 0.75f);
+								} else {
+									toggle_targets(ents, o.switch_target);
+									fx2d_burst(ox, oy, o.color, 20, 200.0f);
+									g_audio.play(&o, audio::sfx::click());
+								}
+							}
+							continue;
 						}
 						status2d.goal_time = t;
 						status2d.level_time = t;
@@ -1064,6 +1132,10 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 							ents[i].x = initial2d[i].x;
 							ents[i].y = initial2d[i].y;
 						}
+					}
+					if (checkpoint2d) {
+						p.x = checkpoint2d_x;
+						p.y = checkpoint2d_y;
 					}
 					break;
 				}

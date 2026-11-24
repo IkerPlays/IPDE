@@ -171,6 +171,15 @@ Json Scene::to_json() const {
 		if (!e.sound.empty()) {
 			je["sound"] = e.sound;
 		}
+		if (e.door) {
+			je["door"] = true;
+		}
+		if (e.checkpoint) {
+			je["checkpoint"] = true;
+		}
+		if (!e.switch_target.empty()) {
+			je["switch_target"] = e.switch_target;
+		}
 		list.push_back(je);
 	}
 	j["entities"] = list;
@@ -261,6 +270,9 @@ Scene Scene::from_json(const Json &p_json) {
 		en.bounce = (float)je["bounce"].as_number(0);
 		en.chase_speed = (float)je["chase_speed"].as_number(0);
 		en.sound = je["sound"].as_string();
+		en.door = je["door"].as_bool(false);
+		en.checkpoint = je["checkpoint"].as_bool(false);
+		en.switch_target = je["switch_target"].as_string();
 		en.chase_range = (float)je["chase_range"].as_number(entity_type_is_3d(en.type) ? 8.0 : 300.0);
 		s.entities.push_back(en);
 	}

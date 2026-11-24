@@ -12,6 +12,7 @@
 - **Juego 3D:** jugador en tercera persona (WASD, salto, colisiones), monedas coleccionables y HUD.
 - **Audio:** efectos de sonido integrados (monedas, salto, trampolín, caídas, meta), sonidos WAV propios y música en bucle.
 - **Niveles:** varios niveles por proyecto; al tocar la meta se pasa al siguiente. Comportamientos: plataformas móviles, enemigos, peligros, meta y trampolines.
+- **Lógica sin código:** puertas que se abren con todas las monedas, interruptores que muestran u ocultan objetos y puntos de control.
 - **Editor 2D:** escena con rectángulos, círculos y textos, visor con zoom y cuadrícula, inspector y comportamientos (girar, flotar, jugador con WASD y colisiones, cámara que sigue).
 - **Ejecutar (F5)** y **exportar a Windows** (`.exe` + carpeta `data`).
 - **Actualizador integrado:** descarga e instala las versiones nuevas solo; desde **Versiones** puedes instalar cualquier versión (stable, devbuild o anteriores).

@@ -557,6 +557,12 @@ static void draw_scene_panel(App &p_app, float p_width) {
 			prefix = "[+] ";
 		} else if (e.goal) {
 			prefix = "[M] ";
+		} else if (e.door) {
+			prefix = "[P] ";
+		} else if (e.checkpoint) {
+			prefix = "[C] ";
+		} else if (!e.switch_target.empty()) {
+			prefix = "[I] ";
 		} else if (e.chase_speed != 0.0f) {
 			prefix = "[E] ";
 		} else if (e.hazard) {
@@ -1203,6 +1209,34 @@ static void draw_inspector(App &p_app) {
 		checkbox("Coleccionable", &e.collectible);
 		checkbox("Peligroso (reinicia al jugador)", &e.hazard);
 		checkbox("Meta (completa el nivel)", &e.goal);
+		checkbox("Puerta (se abre con todas las monedas)", &e.door);
+		checkbox("Punto de control", &e.checkpoint);
+		{
+			// Switch: pick the name of the entities it shows/hides.
+			const char *preview = e.switch_target.empty() ? "Nada" : e.switch_target.c_str();
+			if (ImGui::BeginCombo("Al tocarlo, alterna", preview)) {
+				if (ImGui::Selectable("Nada", e.switch_target.empty())) {
+					e.switch_target.clear();
+					g_ed.dirty = true;
+				}
+				std::vector<std::string> names;
+				for (const Entity &o : g_ed.scene.entities) {
+					if (&o != &e && !o.name.empty() && std::find(names.begin(), names.end(), o.name) == names.end()) {
+						names.push_back(o.name);
+					}
+				}
+				for (const std::string &n : names) {
+					if (ImGui::Selectable(n.c_str(), n == e.switch_target)) {
+						e.switch_target = n;
+						g_ed.dirty = true;
+					}
+				}
+				ImGui::EndCombo();
+			}
+			if (ImGui::IsItemHovered()) {
+				ImGui::SetTooltip("Interruptor: cuando el jugador lo toca, muestra u oculta los objetos con ese nombre (una vez).");
+			}
+		}
 		if (is3d || g_ed.scene.platformer) {
 			drag_float("Trampolín", &e.bounce, 0.1f, 0, 100, e.bounce > 0 ? "%.1f m/s" : "No");
 		}
