@@ -1,38 +1,39 @@
 # IPDE — notes for Claude
 
-IPDE is a game engine by IkersStudio, based on Godot Engine (C++, SCons). Talk to the owner in Spanish.
+IPDE is IkersStudio's game engine, written from scratch in C++17 (it is NOT based on Godot anymore;
+don't copy Godot code). Talk to the owner in Spanish.
 
 ## Workflow rules (from the owner)
 
 - Work goes to `master` (push there when an update is finished).
 - **After finishing every update, publish a release**: a devbuild by default, or a stable when the
-  owner asks for one. Bump the IPDE version first (see below), commit, push to `master`, then run
-  the release workflow and watch it until it is published (fix and relaunch if a job fails).
-- Releases are named `IPDE v.X.Y.Z` on GitHub Releases, tags `vX.Y.Z-devbuild` / `vX.Y.Z-stable`.
-  Stable releases also get a `stable/vX.Y.Z` branch (created by the workflow).
-- Don't show Godot branding in the UI (no Godot donate/support links, versions, names). The MIT
-  license notice in About → License must stay.
+  owner asks for one. Bump `VERSION` first, commit, push to `master`, then run the release workflow and
+  watch it until it is published (fix and relaunch if it fails).
+- Releases are named `IPDE v.X.Y.Z`, tags `vX.Y.Z-devbuild` / `vX.Y.Z-stable`. Stable releases also get a
+  `stable/vX.Y.Z` branch (created by the workflow).
+- Target platform: **Windows only** (x86_64). Linux/X11 support exists only to develop and take screenshots.
 
 ## Versions
 
-- `version.py`: `ipde_major`, `ipde_minor`, `ipde_patch`, `ipde_channel` are IPDE's own version.
-  Keep the file free of comments and blank lines (Gradle parses it line by line).
-- The Godot base version fields (`major`, `minor`, `patch`, `status`, `short_name = "godot"`) stay as
-  they are for compatibility.
-- Bump the patch number for each devbuild (0.1.1 → 0.1.2…), minor for bigger updates.
+- `VERSION` holds `X.Y.Z`. CMake options `IPDE_VERSION` / `IPDE_CHANNEL` override it in CI.
+- Bump the patch number for each devbuild, minor for bigger updates.
+- Release assets must keep these names (the in-app updater and older versions depend on them):
+  `IPDE_vX.Y.Z_windows_x86_64.exe` and `IPDE_vX.Y.Z_windows_x86_64.zip` (containing `IPDE.exe`).
 
 ## Publishing a release
 
 ```bash
-gh api -X POST repos/IkerPlays/IPDE/actions/workflows/ipde_release.yml/dispatches -f ref=master -f 'inputs[version]=X.Y.Z' -f 'inputs[channel]=devbuild' -f 'inputs[notes]=...'
+gh api -X POST repos/IkerPlays/IPDE/actions/workflows/release.yml/dispatches -f ref=master -f 'inputs[version]=X.Y.Z' -f 'inputs[channel]=devbuild' -f 'inputs[notes]=...'
 ```
 
-The workflow (`.github/workflows/ipde_release.yml`) builds Linux, Windows, macOS and Android
-(release APK signed with the IkersStudio key from secrets) and publishes the assets the in-app
-updater (`editor/ipde/ipde_updater.cpp`) expects.
-
-## Building locally
+## Building / testing locally (Linux)
 
 ```bash
-scons platform=linuxbsd target=editor -j4 wayland=no accesskit=no
+cmake -S . -B build -G Ninja && ninja -C build
+./build/IPDE                     # dashboard
+./build/IPDE --open <project>    # editor
+./build/IPDE --run <project>     # play a project
 ```
+
+Screenshots: run under `Xvfb` and capture with `import -window root`.
+`IPDE_UPDATER_API=<url>` points the updater to a mock releases endpoint.

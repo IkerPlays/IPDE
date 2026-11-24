@@ -1,0 +1,115 @@
+name: 🚀 IPDE Release
+# Builds IPDE for Windows and publishes it on GitHub Releases as "IPDE v.X.Y.Z"
+# (stable or devbuild). Stable releases also get a "stable/vX.Y.Z" branch.
+#
+# Assets (the in-app updater depends on these names):
+#   IPDE_vX.Y.Z_windows_x86_64.exe  -> downloaded by the IPDE updater
+#   IPDE_vX.Y.Z_windows_x86_64.zip  -> IPDE.exe, for older IPDE versions (<= 0.2.x) that update from a zip
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "IPDE version (X.Y.Z)"
+        required: true
+        type: string
+      channel:
+        description: "Release channel"
+        required: true
+        default: devbuild
+        type: choice
+        options: [devbuild, stable]
+      notes:
+        description: "Release notes"
+        required: false
+        type: string
+
+concurrency:
+  group: ipde-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: 🏁 Build Windows
+    runs-on: windows-latest
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.info.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate version
+        id: info
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IN_VERSION: ${{ inputs.version }}
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          VERSION="${IN_VERSION#v}"
+          VERSION="${VERSION#.}"
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Invalid version '$IN_VERSION', expected X.Y.Z"
+            exit 1
+          fi
+          if gh api "repos/${{ github.repository }}/git/ref/tags/v${VERSION}-${CHANNEL}" >/dev/null 2>&1; then
+            echo "::error::Tag v${VERSION}-${CHANNEL} already exists."
+            exit 1
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+      - name: Configure
+        run: cmake -S . -B build -A x64 -DIPDE_VERSION=${{ steps.info.outputs.version }} -DIPDE_CHANNEL=${{ inputs.channel }}
+      - name: Build
+        run: cmake --build build --config Release --parallel
+      - name: Package
+        shell: pwsh
+        run: |
+          $v = "${{ steps.info.outputs.version }}"
+          New-Item -ItemType Directory -Force -Path dist, zipdir | Out-Null
+          Copy-Item build/Release/IPDE.exe "dist/IPDE_v$($v)_windows_x86_64.exe"
+          Copy-Item build/Release/IPDE.exe zipdir/IPDE.exe
+          Compress-Archive -Path zipdir/* -DestinationPath "dist/IPDE_v$($v)_windows_x86_64.zip"
+          Get-ChildItem dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: dist/*
+          retention-days: 7
+
+  publish:
+    name: 📦 Publish release
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: assets
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+          CHANNEL: ${{ inputs.channel }}
+          NOTES: ${{ inputs.notes }}
+        run: |
+          ls -l assets
+          TAG="v${VERSION}-${CHANNEL}"
+          if [ "$CHANNEL" = "stable" ]; then
+            HEADER="**Stable** de IPDE."
+            FLAGS="--latest"
+          else
+            HEADER="**DevBuild** de IPDE (versión de desarrollo)."
+            FLAGS="--prerelease --latest=false"
+          fi
+          printf '%s\n\n%s\n' "$HEADER" "$NOTES" > notes.md
+          gh release create "$TAG" assets/* --repo "${{ github.repository }}" --target "${{ github.sha }}" \
+            --title "IPDE v.${VERSION}" --notes-file notes.md $FLAGS
+      - name: Create stable branch
+        if: inputs.channel == 'stable'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          gh api "repos/${{ github.repository }}/git/refs" -f ref="refs/heads/stable/v${VERSION}" -f sha="${{ github.sha }}"

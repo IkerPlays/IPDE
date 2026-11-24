@@ -1,0 +1,25 @@
+name: 🛠️ Build (Windows)
+# Checks that IPDE compiles on every push and pull request.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    name: Windows x86_64
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -A x64
+      - name: Build
+        run: cmake --build build --config Release --parallel
+      - uses: actions/upload-artifact@v4
+        with:
+          name: IPDE-windows-x86_64
+          path: build/Release/IPDE.exe
+          retention-days: 7
