@@ -3,6 +3,7 @@
 #include "app/app.h"
 #include "app/game.h"
 #include "app/scene3d.h"
+#include "core/audio.h"
 #include "core/fs.h"
 #include "platform/platform.h"
 #include "render3d/renderer3d.h"
@@ -195,6 +196,32 @@ static void export_windows(App &p_app) {
 	ok = ok && fs::copy_file(platform::get_executable_path(), fs::join(out_dir, exe_name));
 	ok = ok && fs::copy_file(p_app.project.get_file(), fs::join(data_dir, "project.ipde"));
 	ok = ok && fs::copy_file(p_app.project.get_scene_file(), fs::join(data_dir, "main.scene"));
+	// Files used by the scene (textures, models, sounds, music), keeping their relative paths.
+	std::vector<std::string> files;
+	if (!g_ed.scene.music.empty()) {
+		files.push_back(g_ed.scene.music);
+	}
+	for (const Entity &e : g_ed.scene.entities) {
+		for (const std::string *f : { &e.texture, &e.model, &e.sound }) {
+			if (!f->empty()) {
+				files.push_back(*f);
+			}
+		}
+	}
+	std::sort(files.begin(), files.end());
+	files.erase(std::unique(files.begin(), files.end()), files.end());
+	int missing = 0;
+	for (const std::string &f : files) {
+		const std::string src = fs::join(p_app.project.path, f);
+		const std::string dst = fs::join(data_dir, f);
+		fs::make_dirs(fs::get_dir(dst));
+		if (!fs::copy_file(src, dst)) {
+			missing++;
+		}
+	}
+	if (ok && missing > 0) {
+		p_app.toast(std::to_string(missing) + " archivo(s) usados por la escena no se encontraron.", true);
+	}
 	if (ok) {
 		g_ed.last_export = out_dir;
 		p_app.toast("Juego exportado para Windows en: " + out_dir);
@@ -592,11 +619,64 @@ static bool text_field(const char *p_label, std::string &r_value) {
 	return false;
 }
 
+// Plays a WAV from the project (preview in the editor).
+static void preview_sound(App &p_app, const std::string &p_relative) {
+	audio::init();
+	audio::stop_all();
+	audio::Sound s = audio::load_wav(fs::join(p_app.project.path, p_relative));
+	if (!s) {
+		p_app.toast("No se pudo leer el WAV (usa PCM 8/16/24 bits o float 32).", true);
+		return;
+	}
+	audio::play(s);
+}
+
+// A WAV path field with "Importar", "Escuchar" and "Quitar" buttons.
+static void sound_field(App &p_app, const char *p_label, std::string &r_path) {
+	ImGui::PushID(p_label);
+	text_field(p_label, r_path);
+	if (ImGui::Button("Importar WAV...")) {
+		const std::string rel = import_asset(p_app, "Importar sonido", "Sonidos WAV", "*.wav");
+		if (!rel.empty()) {
+			r_path = rel;
+			g_ed.dirty = true;
+		}
+	}
+	if (!r_path.empty()) {
+		ImGui::SameLine();
+		if (ImGui::Button("Escuchar")) {
+			preview_sound(p_app, r_path);
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Quitar")) {
+			r_path.clear();
+			g_ed.dirty = true;
+		}
+	}
+	ImGui::PopID();
+}
+
+static void draw_audio_settings(App &p_app) {
+	Scene &sc = g_ed.scene;
+	ImGui::SeparatorText("Audio");
+	checkbox("Efectos de sonido", &sc.sound_effects);
+	ui::dim_text("Monedas, saltos, trampolines, caídas y meta.");
+	sound_field(p_app, "Música (WAV)", sc.music);
+	if (!sc.music.empty()) {
+		ImGui::SliderFloat("Volumen música", &sc.music_volume, 0.0f, 1.0f, "%.2f");
+		if (ImGui::IsItemEdited()) {
+			g_ed.dirty = true;
+		}
+	}
+}
+
 static void draw_environment(App &p_app) {
 	Scene &sc = g_ed.scene;
 	if (!sc.is_3d) {
 		ImGui::SeparatorText("Escena");
 		color_edit("Fondo", &sc.background);
+		draw_audio_settings(p_app);
+		ImGui::Spacing();
 		ui::dim_text("Selecciona una entidad para editarla.");
 		return;
 	}
@@ -632,6 +712,7 @@ static void draw_environment(App &p_app) {
 		g_ed.dirty = true;
 		p_app.toast("Cámara del juego actualizada.");
 	}
+	draw_audio_settings(p_app);
 }
 
 static void draw_inspector(App &p_app) {
@@ -832,6 +913,10 @@ static void draw_inspector(App &p_app) {
 			ui::dim_text(is3d ? "Se mueve con WASD o las flechas, salta con Espacio y choca con lo sólido." : "Se mueve con WASD o las flechas y choca con las formas sólidas.");
 		}
 		checkbox("La cámara lo sigue", &e.camera_follow);
+		if (e.collectible || e.goal || e.bounce > 0.0f) {
+			sound_field(p_app, "Sonido (WAV)", e.sound);
+			ui::dim_text("Suena al recogerlo o tocarlo. Vacío: efecto integrado.");
+		}
 	}
 	ImGui::PopItemWidth();
 	ImGui::EndChild();

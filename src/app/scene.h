@@ -77,6 +77,7 @@ struct Entity {
 	float bounce = 0.0f; // Jump pad: upward speed given to the player (0 = off).
 	float chase_speed = 0.0f; // Enemy: follows the player when near (0 = off).
 	float chase_range = 8.0f;
+	std::string sound; // WAV played when it is collected or touched (instead of the built-in effect).
 
 	bool has_motion() const { return move_x != 0.0f || move_y != 0.0f || move_z != 0.0f; }
 };
@@ -105,6 +106,10 @@ struct Scene {
 	float camera_x = 0, camera_y = 4, camera_z = 10;
 	float camera_target_x = 0, camera_target_y = 0, camera_target_z = 0;
 	float camera_fov = 60.0f;
+	// Audio.
+	std::string music; // WAV file (relative to the project) played in a loop.
+	float music_volume = 0.6f;
+	bool sound_effects = true; // Built-in effects (coins, jumps, goal...).
 	std::vector<Entity> entities;
 
 	Json to_json() const;

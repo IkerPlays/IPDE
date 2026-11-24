@@ -105,6 +105,12 @@ Json Scene::to_json() const {
 	cam["fov"] = (double)camera_fov;
 	j["camera"] = cam;
 
+	Json audio = Json::object();
+	audio["music"] = music;
+	audio["music_volume"] = (double)music_volume;
+	audio["effects"] = sound_effects;
+	j["audio"] = audio;
+
 	Json list = Json::array();
 	for (const Entity &e : entities) {
 		Json je = Json::object();
@@ -152,6 +158,9 @@ Json Scene::to_json() const {
 		je["bounce"] = (double)e.bounce;
 		je["chase_speed"] = (double)e.chase_speed;
 		je["chase_range"] = (double)e.chase_range;
+		if (!e.sound.empty()) {
+			je["sound"] = e.sound;
+		}
 		list.push_back(je);
 	}
 	j["entities"] = list;
@@ -187,6 +196,11 @@ Scene Scene::from_json(const Json &p_json) {
 	s.camera_target_y = (float)cam["target_y"].as_number(s.camera_target_y);
 	s.camera_target_z = (float)cam["target_z"].as_number(s.camera_target_z);
 	s.camera_fov = (float)cam["fov"].as_number(s.camera_fov);
+
+	const Json &audio = p_json["audio"];
+	s.music = audio["music"].as_string();
+	s.music_volume = (float)audio["music_volume"].as_number(s.music_volume);
+	s.sound_effects = audio["effects"].as_bool(true);
 
 	for (const Json &je : p_json["entities"].get_items()) {
 		Entity en;
@@ -231,6 +245,7 @@ Scene Scene::from_json(const Json &p_json) {
 		en.goal = je["goal"].as_bool(false);
 		en.bounce = (float)je["bounce"].as_number(0);
 		en.chase_speed = (float)je["chase_speed"].as_number(0);
+		en.sound = je["sound"].as_string();
 		en.chase_range = (float)je["chase_range"].as_number(entity_type_is_3d(en.type) ? 8.0 : 300.0);
 		s.entities.push_back(en);
 	}

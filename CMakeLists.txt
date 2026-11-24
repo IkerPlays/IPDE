@@ -59,7 +59,7 @@ target_include_directories(IPDE PRIVATE src thirdparty "${CMAKE_CURRENT_BINARY_D
 target_link_libraries(IPDE PRIVATE imgui)
 
 if(WIN32)
-	target_link_libraries(IPDE PRIVATE winhttp shell32 ole32 shlwapi dwmapi)
+	target_link_libraries(IPDE PRIVATE winhttp shell32 ole32 shlwapi dwmapi winmm)
 	target_compile_definitions(IPDE PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS)
 else()
 	find_package(X11 REQUIRED)

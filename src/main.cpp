@@ -2,6 +2,7 @@
 
 #include "app/app.h"
 #include "app/game.h"
+#include "core/audio.h"
 #include "core/fs.h"
 #include "platform/platform.h"
 #include "version.h"
@@ -92,6 +93,7 @@ static int run_editor(const std::string &p_open_project) {
 	}
 
 	app.shutdown();
+	audio::shutdown();
 	app.renderer.shutdown();
 	ImGui::DestroyContext();
 	platform::destroy_window();

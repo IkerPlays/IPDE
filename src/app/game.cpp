@@ -1,6 +1,7 @@
 #include "app/game.h"
 
 #include "app/scene3d.h"
+#include "core/audio.h"
 #include "core/fs.h"
 #include "platform/platform.h"
 #include "render/soft_renderer.h"
@@ -10,6 +11,7 @@
 #include <imgui_internal.h>
 
 #include <algorithm>
+#include <map>
 #include <cmath>
 
 extern const uint8_t res_font_roboto[];
@@ -166,6 +168,35 @@ static void draw_hud(ImFont *p_font, int p_score, int p_total, double p_time_all
 	}
 }
 
+/* Audio */
+
+struct GameAudio {
+	std::string project_dir;
+	bool effects = true;
+	std::map<std::string, audio::Sound> cache;
+
+	audio::Sound load(const std::string &p_relative) {
+		auto it = cache.find(p_relative);
+		if (it != cache.end()) {
+			return it->second;
+		}
+		audio::Sound s = audio::load_wav(fs::join(project_dir, p_relative));
+		cache[p_relative] = s;
+		return s;
+	}
+
+	// Plays the entity's own sound if it has one, otherwise the built-in effect.
+	void play(const Entity *p_entity, const audio::Sound &p_builtin, float p_pitch = 1.0f) {
+		if (p_entity && !p_entity->sound.empty()) {
+			audio::play(load(p_entity->sound));
+		} else if (effects && p_builtin) {
+			audio::play(p_builtin, 1.0f, p_pitch);
+		}
+	}
+};
+
+static GameAudio g_audio;
+
 /* 3D game */
 
 struct Game3D {
@@ -200,6 +231,7 @@ struct Game3D {
 		ground = -1;
 		status.deaths++;
 		status.death_flash = now;
+		g_audio.play(nullptr, audio::sfx::hurt());
 		for (size_t i = 0; i < scene.entities.size(); i++) {
 			Entity &e = scene.entities[i];
 			if (e.chase_speed != 0.0f) {
@@ -286,6 +318,7 @@ struct Game3D {
 			if (p.can_jump && on_ground && ImGui::IsKeyPressed(ImGuiKey_Space, false)) {
 				velocity_y = p.jump_force;
 				on_ground = false;
+				g_audio.play(nullptr, audio::sfx::jump());
 			}
 			velocity_y -= 20.0f * dt;
 			velocity_y = std::max(velocity_y, -40.0f);
@@ -296,6 +329,7 @@ struct Game3D {
 			on_ground = false;
 			ground = -1;
 			float bounce = 0.0f;
+			const Entity *bounce_entity = nullptr;
 			for (int axis = 0; axis < 3; axis++) {
 				if (moves[axis] == 0) {
 					continue;
@@ -323,7 +357,10 @@ struct Game3D {
 							pos.y += ob.max.y - pb.min.y;
 							on_ground = true;
 							ground = (int)oi;
-							bounce = std::max(bounce, o.bounce);
+							if (o.bounce > bounce) {
+								bounce = o.bounce;
+								bounce_entity = &o;
+							}
 						} else {
 							pos.y += ob.min.y - pb.max.y;
 						}
@@ -335,6 +372,7 @@ struct Game3D {
 			if (bounce > 0.0f) {
 				velocity_y = bounce; // Jump pad.
 				on_ground = false;
+				g_audio.play(bounce_entity, audio::sfx::bounce());
 				ground = -1;
 			}
 			p.x = pos.x;
@@ -351,6 +389,7 @@ struct Game3D {
 				if (o.collectible && o.visible && pb.overlaps(entity_box(o, SceneRenderer3D::entity_position(o, now, true)))) {
 					o.visible = false;
 					score++;
+					g_audio.play(&o, score == total ? audio::sfx::goal() : audio::sfx::coin());
 					if (score == total) {
 						all_collected_time = now;
 					}
@@ -368,6 +407,8 @@ struct Game3D {
 					}
 					status.goal_time = now;
 					status.level_time = now;
+					g_audio.play(&o, audio::sfx::goal());
+					break;
 				}
 			}
 		}
@@ -473,6 +514,13 @@ int run_game(const std::string &p_project_dir) {
 	cfg.FontDataOwnedByAtlas = false;
 	ImFont *font = io.Fonts->AddFontFromMemoryTTF((void *)res_font_roboto, (int)res_font_roboto_size, 20.0f, &cfg);
 	ImGui::GetStyle().AntiAliasedLinesUseTex = false;
+
+	audio::init();
+	g_audio.project_dir = project.path;
+	g_audio.effects = scene.sound_effects;
+	if (!scene.music.empty()) {
+		audio::play(g_audio.load(scene.music), scene.music_volume, 1.0f, true);
+	}
 
 	SoftRenderer renderer;
 	const double start = platform::get_time();
@@ -624,6 +672,7 @@ int run_game(const std::string &p_project_dir) {
 					if (pb.overlaps(entity_box(o, Vec3(ox, oy, 0)))) {
 						o.visible = false;
 						score2d++;
+						g_audio.play(&o, score2d == total2d ? audio::sfx::goal() : audio::sfx::coin());
 						if (score2d == total2d) {
 							all2d_time = t;
 						}
@@ -644,11 +693,14 @@ int run_game(const std::string &p_project_dir) {
 						}
 						status2d.goal_time = t;
 						status2d.level_time = t;
+						g_audio.play(&o, audio::sfx::goal());
+						break;
 					}
 				}
 				if (died) {
 					status2d.deaths++;
 					status2d.death_flash = t;
+					g_audio.play(nullptr, audio::sfx::hurt());
 					for (size_t i = 0; i < ents.size(); i++) {
 						if (ents[i].player || ents[i].chase_speed != 0.0f) {
 							ents[i].x = initial2d[i].x;
@@ -684,6 +736,7 @@ int run_game(const std::string &p_project_dir) {
 		}
 	}
 
+	audio::shutdown();
 	renderer.shutdown();
 	ImGui::DestroyContext();
 	platform::destroy_window();
