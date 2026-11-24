@@ -4,6 +4,7 @@
 
 #include <stb/stb_image.h>
 
+#include <algorithm>
 #include <cmath>
 
 namespace ipde {
@@ -26,6 +27,28 @@ Environment3D SceneRenderer3D::make_environment(const Scene &p_scene, double p_t
 	env.fog_start = e.fog_start;
 	env.fog_end = e.fog_end;
 	env.time = (float)p_time;
+	if (e.day_cycle > 0.0f && p_time > 0.0) {
+		// The sun turns around the sky; at night the sky darkens and a dim bluish "moon" lights the scene.
+		const double phase = std::fmod(p_time / e.day_cycle, 1.0);
+		const float height = (float)std::sin(phase * 2.0 * PI + std::asin(std::sin(e.sun_pitch * DEG2RAD))); // Starts at the scene's sun height.
+		const float day = std::clamp(height * 3.0f + 0.3f, 0.0f, 1.0f);
+		const float dusk = std::clamp(1.0f - std::fabs(height) * 4.0f, 0.0f, 1.0f); // Near sunrise/sunset.
+		const Vec3 night_top(0.004f, 0.006f, 0.02f), night_hor(0.02f, 0.025f, 0.05f);
+		const Vec3 dusk_hor(0.9f, 0.38f, 0.16f);
+		env.sky_top = lerp(night_top, env.sky_top, day);
+		env.sky_horizon = lerp(lerp(night_hor, env.sky_horizon, day), dusk_hor, dusk * 0.6f * day + dusk * 0.2f);
+		env.ambient = e.ambient * (0.35f + 0.65f * day);
+		const float elevation = std::max(std::fabs(height), 0.15f);
+		const float yaw = e.sun_yaw * DEG2RAD + (float)(phase * 2.0 * PI) * 0.25f;
+		env.sun_direction = Vec3(-std::cos(std::asin(elevation)) * std::sin(yaw), -elevation, -std::cos(std::asin(elevation)) * std::cos(yaw));
+		if (height < 0.0f) {
+			env.sun_color = Vec3(0.35f, 0.42f, 0.7f); // Moonlight.
+			env.sun_energy = 0.35f;
+		} else {
+			env.sun_color = lerp(Vec3(1.0f, 0.55f, 0.3f), env.sun_color, std::clamp(height * 2.5f, 0.0f, 1.0f));
+			env.sun_energy = e.sun_energy * std::clamp(height * 4.0f, 0.15f, 1.0f);
+		}
+	}
 	return env;
 }
 

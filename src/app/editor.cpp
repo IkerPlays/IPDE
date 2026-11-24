@@ -1352,6 +1352,43 @@ static void draw_environment(App &p_app) {
 		return;
 	}
 	Environment &env = sc.environment;
+	ImGui::SeparatorText("Ambiente rápido");
+	{
+		struct SkyPreset {
+			const char *name;
+			uint32_t top, horizon, ground, sun;
+			float ambient, pitch, energy, fog_start, fog_end;
+		};
+		const SkyPreset presets[] = {
+			{ "Día", 0xFF5B8FDE, 0xFFC8D6EC, 0xFF6E6358, 0xFFFFF4E0, 0.5f, 50, 1.4f, 30, 140 },
+			{ "Atardecer", 0xFF3A4C8F, 0xFFF29A5E, 0xFF5A4038, 0xFFFFB070, 0.45f, 9, 1.3f, 25, 120 },
+			{ "Noche", 0xFF05070F, 0xFF1A2238, 0xFF0E0E14, 0xFF8EA4E8, 0.25f, 40, 0.35f, 20, 90 },
+			{ "Niebla", 0xFF9AA4B0, 0xFFC4C9CE, 0xFF7A7C80, 0xFFE8ECF0, 0.7f, 60, 0.6f, 4, 40 },
+		};
+		for (int i = 0; i < IM_ARRAYSIZE(presets); i++) {
+			if (i > 0) {
+				ImGui::SameLine();
+			}
+			if (ImGui::Button(presets[i].name)) {
+				const SkyPreset &p = presets[i];
+				env.sky_top = p.top;
+				env.sky_horizon = p.horizon;
+				env.ground = p.ground;
+				env.sun_color = p.sun;
+				env.ambient = p.ambient;
+				env.sun_pitch = p.pitch;
+				env.sun_energy = p.energy;
+				env.fog = true;
+				env.fog_start = p.fog_start;
+				env.fog_end = p.fog_end;
+				g_ed.dirty = true;
+			}
+		}
+		drag_float("Ciclo día/noche", &env.day_cycle, 1.0f, 0, 3600, env.day_cycle > 0 ? "%.0f s" : "No");
+		if (ImGui::IsItemHovered()) {
+			ImGui::SetTooltip("Duración de un día completo en el juego (0 = sin ciclo). Activa \"Animar\" para verlo en el editor.");
+		}
+	}
 	ImGui::SeparatorText("Cielo");
 	color_edit("Cielo", &env.sky_top);
 	color_edit("Horizonte", &env.sky_horizon);

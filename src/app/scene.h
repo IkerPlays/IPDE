@@ -107,6 +107,7 @@ struct Environment {
 	bool fog = true;
 	float fog_start = 30.0f;
 	float fog_end = 140.0f;
+	float day_cycle = 0.0f; // Seconds for a full day in the game (0 = the sky doesn't change).
 };
 
 struct Scene {

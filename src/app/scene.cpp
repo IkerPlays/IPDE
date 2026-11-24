@@ -101,6 +101,7 @@ Json Scene::to_json() const {
 	env["fog"] = environment.fog;
 	env["fog_start"] = (double)environment.fog_start;
 	env["fog_end"] = (double)environment.fog_end;
+	env["day_cycle"] = (double)environment.day_cycle;
 	j["environment"] = env;
 
 	Json cam = Json::object();
@@ -223,6 +224,7 @@ Scene Scene::from_json(const Json &p_json) {
 	e.fog = env["fog"].as_bool(e.fog);
 	e.fog_start = (float)env["fog_start"].as_number(e.fog_start);
 	e.fog_end = (float)env["fog_end"].as_number(e.fog_end);
+	e.day_cycle = std::max(0.0f, (float)env["day_cycle"].as_number(0));
 
 	const Json &cam = p_json["camera"];
 	s.camera_x = (float)cam["x"].as_number(s.camera_x);
