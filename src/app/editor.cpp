@@ -356,6 +356,22 @@ static void add_entity(EntityType p_type) {
 			case EntityType::MODEL:
 				e.color = 0xFFDDDDDD;
 				break;
+			case EntityType::TREE:
+				e.width = e.depth = 2.0f;
+				e.height = 4.0f;
+				e.y = 2.0f;
+				e.color = 0xFFFFFFFF;
+				e.roughness = 0.9f;
+				e.seed = 1 + (int)(platform::get_time() * 1000.0) % 9999;
+				break;
+			case EntityType::ROCK:
+				e.width = e.depth = 1.6f;
+				e.height = 1.0f;
+				e.y = 0.4f;
+				e.color = 0xFFFFFFFF;
+				e.roughness = 0.85f;
+				e.seed = 1 + (int)(platform::get_time() * 1000.0) % 9999;
+				break;
 			case EntityType::TERRAIN:
 				e.width = e.depth = 40.0f;
 				e.height = 6.0f;
@@ -574,6 +590,37 @@ static void add_preset(Preset p_preset) {
 	g_ed.dirty = true;
 }
 
+// Adds trees and rocks on top of a terrain (at its surface height).
+static void scatter_on_terrain(int p_terrain) {
+	const Entity t = g_ed.scene.entities[p_terrain];
+	uint32_t rnd = (uint32_t)(platform::get_time() * 1000.0) * 2654435761u + 1u;
+	auto next = [&]() {
+		rnd = rnd * 1664525u + 1013904223u;
+		return ((rnd >> 8) & 0xFFFF) / 65535.0f;
+	};
+	const int trees = std::max(4, (int)(t.width * t.depth / 90.0f));
+	for (int i = 0; i < trees + trees / 3; i++) {
+		const bool is_tree = i < trees;
+		const float u = 0.05f + 0.9f * next(), v = 0.05f + 0.9f * next();
+		Entity e;
+		e.type = is_tree ? EntityType::TREE : EntityType::ROCK;
+		e.name = is_tree ? "Árbol" : "Roca";
+		e.color = 0xFFFFFFFF;
+		e.roughness = 0.9f;
+		e.seed = 1 + (int)(next() * 9999);
+		const float scale = 0.7f + 0.6f * next();
+		e.width = e.depth = (is_tree ? 2.0f : 1.6f) * scale;
+		e.height = (is_tree ? 4.0f : 1.0f) * scale;
+		e.rot_y = next() * 360.0f;
+		e.x = t.x + (u - 0.5f) * t.width;
+		e.z = t.z + (v - 0.5f) * t.depth;
+		const float ground = t.y + (meshes::terrain_height(t.seed, u, v) - 0.5f) * t.height;
+		e.y = ground + e.height * (is_tree ? 0.5f : 0.35f);
+		g_ed.scene.entities.push_back(e);
+	}
+	g_ed.dirty = true;
+}
+
 static void delete_selected() {
 	if (g_ed.selected >= 0 && g_ed.selected < (int)g_ed.scene.entities.size()) {
 		g_ed.scene.entities.erase(g_ed.scene.entities.begin() + g_ed.selected);
@@ -727,7 +774,7 @@ static void draw_scene_panel(App &p_app, float p_width) {
 	}
 	if (ImGui::BeginPopup("AddMenu")) {
 		if (g_ed.scene.is_3d) {
-			const EntityType types[] = { EntityType::CUBE, EntityType::SPHERE, EntityType::PLANE, EntityType::CYLINDER, EntityType::CONE, EntityType::TORUS, EntityType::CAPSULE, EntityType::TERRAIN, EntityType::MODEL, EntityType::LIGHT };
+			const EntityType types[] = { EntityType::CUBE, EntityType::SPHERE, EntityType::PLANE, EntityType::CYLINDER, EntityType::CONE, EntityType::TORUS, EntityType::CAPSULE, EntityType::TERRAIN, EntityType::TREE, EntityType::ROCK, EntityType::MODEL, EntityType::LIGHT };
 			for (EntityType t : types) {
 				if (t == EntityType::MODEL || t == EntityType::LIGHT) {
 					ImGui::Separator();
@@ -1491,6 +1538,14 @@ static void draw_inspector(App &p_app) {
 				g_ed.dirty = true;
 			}
 			ui::dim_text("El tamaño Y es la altura de las colinas. El jugador puede caminar por encima.");
+			if (ImGui::Button("Plantar árboles y rocas")) {
+				scatter_on_terrain(g_ed.selected);
+			}
+		}
+		if (e.type == EntityType::TREE || e.type == EntityType::ROCK) {
+			if (ImGui::InputInt("Forma (semilla)", &e.seed)) {
+				g_ed.dirty = true;
+			}
 		}
 		if (e.type == EntityType::MODEL) {
 			text_field("Modelo (.obj)", e.model);

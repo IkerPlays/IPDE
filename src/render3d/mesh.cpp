@@ -220,6 +220,115 @@ std::shared_ptr<Mesh> terrain(int p_seed) {
 	return m;
 }
 
+/* Decorations */
+
+// Appends a frustum (cone when p_r1 == 0) around the Y axis with a solid color.
+static void add_frustum(Mesh &m, float p_y0, float p_y1, float p_r0, float p_r1, int p_segments, const Vec3 &p_color, float p_twist) {
+	const uint32_t base = (uint32_t)m.positions.size();
+	const float slope = (p_r0 - p_r1) / std::max(1e-4f, p_y1 - p_y0);
+	for (int s = 0; s <= p_segments; s++) {
+		const float a = (float)s / p_segments * 2.0f * PI + p_twist;
+		const float cx = std::cos(a), sz = std::sin(a);
+		const Vec3 n = Vec3(cx, slope, sz).normalized();
+		add_vertex(m, Vec3(cx * p_r0, p_y0, sz * p_r0), n, (float)s / p_segments, 1);
+		add_vertex(m, Vec3(cx * p_r1, p_y1, sz * p_r1), n, (float)s / p_segments, 0);
+		m.colors.push_back(p_color);
+		m.colors.push_back(p_color * 1.15f);
+	}
+	for (int s = 0; s < p_segments; s++) {
+		const uint32_t a = base + s * 2, b = a + 1, c = a + 2, d = a + 3;
+		m.indices.insert(m.indices.end(), { a, c, d, a, d, b });
+	}
+	// Bottom cap.
+	const uint32_t center = (uint32_t)m.positions.size();
+	add_vertex(m, Vec3(0, p_y0, 0), Vec3(0, -1, 0), 0.5f, 0.5f);
+	m.colors.push_back(p_color * 0.7f);
+	for (int s = 0; s <= p_segments; s++) {
+		const float a = (float)s / p_segments * 2.0f * PI + p_twist;
+		add_vertex(m, Vec3(std::cos(a) * p_r0, p_y0, std::sin(a) * p_r0), Vec3(0, -1, 0), 0, 0);
+		m.colors.push_back(p_color * 0.7f);
+	}
+	for (int s = 0; s < p_segments; s++) {
+		m.indices.insert(m.indices.end(), { center, center + 1 + s, center + 2 + s });
+	}
+}
+
+std::shared_ptr<Mesh> tree(int p_seed) {
+	static std::map<int, std::shared_ptr<Mesh>> cache;
+	auto it = cache.find(p_seed);
+	if (it != cache.end()) {
+		return it->second;
+	}
+	auto m = std::make_shared<Mesh>();
+	const float v = hash_noise(p_seed, 3, 11);
+	const Vec3 trunk(0.22f, 0.11f, 0.05f);
+	const Vec3 leaves = Vec3(0.05f + 0.04f * v, 0.28f + 0.12f * hash_noise(p_seed, 5, 2), 0.06f);
+	add_frustum(*m, -0.5f, -0.18f, 0.07f, 0.055f, 8, trunk, 0);
+	const int layers = 3;
+	for (int i = 0; i < layers; i++) {
+		const float y0 = -0.32f + i * 0.24f;
+		const float r = 0.5f - i * 0.12f;
+		add_frustum(*m, y0, std::min(0.5f, y0 + 0.42f), r, 0.0f, 10, leaves * (0.85f + 0.12f * i), i * 0.3f);
+	}
+	m->fix_winding();
+	m->compute_bounds();
+	cache[p_seed] = m;
+	return m;
+}
+
+std::shared_ptr<Mesh> rock(int p_seed) {
+	static std::map<int, std::shared_ptr<Mesh>> cache;
+	auto it = cache.find(p_seed);
+	if (it != cache.end()) {
+		return it->second;
+	}
+	// A low-poly sphere with bumpy radius; every triangle gets its own normal (faceted look).
+	const int rings = 6, segs = 9;
+	std::vector<Vec3> pts;
+	for (int r = 0; r <= rings; r++) {
+		const float phi = (float)r / rings * PI;
+		for (int sgm = 0; sgm < segs; sgm++) {
+			const float th = (float)sgm / segs * 2.0f * PI;
+			const float k = (r == 0 || r == rings) ? 1.0f : 0.75f + 0.35f * hash_noise(r, sgm, p_seed);
+			pts.push_back(Vec3(std::sin(phi) * std::cos(th) * k, std::cos(phi) * k * 0.75f, std::sin(phi) * std::sin(th) * k));
+		}
+	}
+	auto m = std::make_shared<Mesh>();
+	auto tri = [&](const Vec3 &a, const Vec3 &b, const Vec3 &c) {
+		Vec3 n = cross(b - a, c - a).normalized();
+		const Vec3 center = (a + b + c) * (1.0f / 3.0f);
+		if (dot(n, center) < 0) {
+			n = n * -1.0f;
+		}
+		const float shade = 0.8f + 0.2f * hash_noise((int)(center.x * 97), (int)(center.z * 89), p_seed);
+		const Vec3 col = Vec3(0.30f, 0.29f, 0.27f) * shade;
+		const uint32_t base = (uint32_t)m->positions.size();
+		for (const Vec3 *p : { &a, &b, &c }) {
+			add_vertex(*m, *p, n, p->x * 0.5f + 0.5f, p->z * 0.5f + 0.5f);
+			m->colors.push_back(col);
+		}
+		m->indices.insert(m->indices.end(), { base, base + 1, base + 2 });
+	};
+	for (int r = 0; r < rings; r++) {
+		for (int sgm = 0; sgm < segs; sgm++) {
+			const Vec3 &a = pts[r * segs + sgm], &b = pts[r * segs + (sgm + 1) % segs];
+			const Vec3 &c = pts[(r + 1) * segs + sgm], &d = pts[(r + 1) * segs + (sgm + 1) % segs];
+			tri(a, c, d);
+			tri(a, d, b);
+		}
+	}
+	// Fit the unit box.
+	m->compute_bounds();
+	const Vec3 size = m->aabb_max - m->aabb_min, mid = (m->aabb_max + m->aabb_min) * 0.5f;
+	for (Vec3 &p : m->positions) {
+		p = Vec3((p.x - mid.x) / size.x, (p.y - mid.y) / size.y, (p.z - mid.z) / size.z);
+	}
+	m->fix_winding();
+	m->compute_bounds();
+	cache[p_seed] = m;
+	return m;
+}
+
 std::shared_ptr<Mesh> plane() {
 	auto m = std::make_shared<Mesh>();
 	const Vec3 n(0, 1, 0);

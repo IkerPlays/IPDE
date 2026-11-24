@@ -94,6 +94,12 @@ std::shared_ptr<Mesh> SceneRenderer3D::get_mesh(const Entity &p_e, const std::st
 	if (p_e.type == EntityType::TERRAIN) {
 		return meshes::terrain(p_e.seed); // Cached by seed.
 	}
+	if (p_e.type == EntityType::TREE) {
+		return meshes::tree(p_e.seed % 8); // A few variations are enough.
+	}
+	if (p_e.type == EntityType::ROCK) {
+		return meshes::rock(p_e.seed % 16);
+	}
 	auto it = primitives.find(p_e.type);
 	if (it != primitives.end()) {
 		return it->second;

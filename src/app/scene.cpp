@@ -31,6 +31,8 @@ static const TypeInfo TYPES[] = {
 	{ EntityType::MODEL, "model", "Modelo" },
 	{ EntityType::LIGHT, "light", "Luz" },
 	{ EntityType::TERRAIN, "terrain", "Terreno" },
+	{ EntityType::TREE, "tree", "Árbol" },
+	{ EntityType::ROCK, "rock", "Roca" },
 };
 
 const char *entity_type_name(EntityType p_type) {
@@ -148,7 +150,7 @@ Json Scene::to_json() const {
 			je["flip_x"] = true;
 		}
 		je["uv_scale"] = (double)e.uv_scale;
-		if (e.type == EntityType::TERRAIN) {
+		if (e.type == EntityType::TERRAIN || e.type == EntityType::TREE || e.type == EntityType::ROCK) {
 			je["seed"] = e.seed;
 		}
 		if (e.pattern != 0) {
@@ -717,6 +719,28 @@ static Scene open_world_scene() {
 	goal.goal = true;
 	goal.solid = false;
 	s.entities.push_back(goal);
+	// Trees and rocks above the water line, away from the start.
+	uint32_t rnd = (uint32_t)seed * 2654435761u + 7u;
+	auto next = [&]() {
+		rnd = rnd * 1664525u + 1013904223u;
+		return ((rnd >> 8) & 0xFFFF) / 65535.0f;
+	};
+	for (int i = 0, placed = 0; i < 200 && placed < 40; i++) {
+		const float x = (next() - 0.5f) * size * 0.9f, z = (next() - 0.5f) * size * 0.9f;
+		const float gy2 = ground_at(x, z);
+		if (gy2 < water.y + 0.4f || (std::fabs(x - px) < 4 && std::fabs(z - pz) < 4) || (std::fabs(x - gx) < 3 && std::fabs(z - gz) < 3)) {
+			continue;
+		}
+		const bool is_tree = placed % 4 != 3;
+		const float scale = 0.7f + 0.6f * next();
+		Entity e = make3d(is_tree ? "Árbol" : "Roca", is_tree ? EntityType::TREE : EntityType::ROCK, x, 0, z, (is_tree ? 2.0f : 1.6f) * scale, (is_tree ? 4.0f : 1.0f) * scale, (is_tree ? 2.0f : 1.6f) * scale, 0xFFFFFFFF);
+		e.y = gy2 + e.height * (is_tree ? 0.5f : 0.35f);
+		e.seed = 1 + (int)(next() * 9999);
+		e.rot_y = next() * 360.0f;
+		e.roughness = 0.9f;
+		s.entities.push_back(e);
+		placed++;
+	}
 	Entity sign = make3d("Cartel", EntityType::CUBE, px + 2.0f, ground_at(px + 2.0f, pz + 1.0f) + 0.6f, pz + 1.0f, 0.9f, 1.2f, 0.2f, 0xFFB0705A);
 	sign.message = "Explora las colinas, recoge las monedas y sube a la colina más alta para llegar a la meta.";
 	sign.pattern = 3;

@@ -109,12 +109,14 @@ private:
 		Vec3 world;
 		Vec3 normal;
 		Vec2 uv;
+		Vec3 color;
 	};
 	struct ScreenVertex {
 		float x, y, z, inv_w;
 		Vec3 world_w; // Attributes divided by w (perspective-correct interpolation).
 		Vec3 normal_w;
 		Vec2 uv_w;
+		Vec3 color_w;
 	};
 	struct Triangle {
 		ScreenVertex v[3];
@@ -170,7 +172,7 @@ private:
 	void _rasterize_band(int p_y0, int p_y1);
 	void _rasterize_triangle(const Triangle &p_tri, uint32_t p_index, int p_y0, int p_y1);
 	void _shade_band(int p_y0, int p_y1);
-	Vec3 _shade(const Material3D &p_mat, const Vec3 &p_world, Vec3 p_normal, const Vec2 &p_uv, bool p_front) const;
+	Vec3 _shade(const Material3D &p_mat, const Vec3 &p_world, Vec3 p_normal, const Vec2 &p_uv, bool p_front, const Vec3 &p_vertex_color) const;
 	void _draw_sky();
 	void _build_shadow_map();
 	float _shadow_factor(const Vec3 &p_world, const Vec3 &p_normal) const;

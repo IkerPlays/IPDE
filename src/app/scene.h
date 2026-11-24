@@ -26,6 +26,8 @@ enum class EntityType {
 	MODEL, // Wavefront OBJ file inside the project.
 	LIGHT, // Point light.
 	TERRAIN, // Hilly ground generated from a seed.
+	TREE, // Decoration (shape from the seed).
+	ROCK, // Decoration (shape from the seed).
 };
 
 bool entity_type_is_3d(EntityType p_type);

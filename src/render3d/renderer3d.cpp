@@ -119,6 +119,7 @@ void Renderer3D::draw_mesh(const Mesh &p_mesh, const Mat4 &p_model, const Materi
 		verts[i].world = p_model.transform_point(p);
 		verts[i].normal = i < p_mesh.normals.size() ? nmat.transform_dir(p_mesh.normals[i]).normalized() : Vec3(0, 1, 0);
 		verts[i].uv = i < p_mesh.uvs.size() ? p_mesh.uvs[i] : Vec2();
+		verts[i].color = i < p_mesh.colors.size() ? p_mesh.colors[i] : Vec3(1, 1, 1);
 	}
 	for (size_t i = 0; i + 2 < p_mesh.indices.size(); i += 3) {
 		const ShadeVertex tri[3] = { verts[p_mesh.indices[i]], verts[p_mesh.indices[i + 1]], verts[p_mesh.indices[i + 2]] };
@@ -159,6 +160,7 @@ void Renderer3D::_clip_and_queue(const ShadeVertex *p_verts, const Material3D *p
 			v.world = lerp(a.world, b.world, t);
 			v.normal = lerp(a.normal, b.normal, t);
 			v.uv = Vec2{ a.uv.x + (b.uv.x - a.uv.x) * t, a.uv.y + (b.uv.y - a.uv.y) * t };
+			v.color = lerp(a.color, b.color, t);
 			in[count++] = v;
 		}
 	}
@@ -177,6 +179,7 @@ void Renderer3D::_clip_and_queue(const ShadeVertex *p_verts, const Material3D *p
 		sv[i].world_w = in[i].world * iw;
 		sv[i].normal_w = in[i].normal * iw;
 		sv[i].uv_w = Vec2{ in[i].uv.x * iw, in[i].uv.y * iw };
+		sv[i].color_w = in[i].color * iw;
 	}
 
 	for (int i = 1; i + 1 < count; i++) {
@@ -487,8 +490,8 @@ static float pattern_factor(const Material3D &p_mat, const Vec3 &p_world, const 
 	}
 }
 
-Vec3 Renderer3D::_shade(const Material3D &p_mat, const Vec3 &p_world, Vec3 p_normal, const Vec2 &p_uv, bool p_front) const {
-	Vec3 albedo = p_mat.albedo;
+Vec3 Renderer3D::_shade(const Material3D &p_mat, const Vec3 &p_world, Vec3 p_normal, const Vec2 &p_uv, bool p_front, const Vec3 &p_vertex_color) const {
+	Vec3 albedo = p_mat.albedo * p_vertex_color;
 	if (p_mat.texture) {
 		albedo = albedo * p_mat.texture->sample(p_uv.x * p_mat.uv_scale, p_uv.y * p_mat.uv_scale);
 	}
@@ -667,7 +670,8 @@ void Renderer3D::_shade_band(int p_y0, int p_y1) {
 			const Vec3 world = (a.world_w * l0 + b.world_w * l1 + c.world_w * l2) * w;
 			const Vec3 normal = (a.normal_w * l0 + b.normal_w * l1 + c.normal_w * l2) * w;
 			const Vec2 uv{ (a.uv_w.x * l0 + b.uv_w.x * l1 + c.uv_w.x * l2) * w, (a.uv_w.y * l0 + b.uv_w.y * l1 + c.uv_w.y * l2) * w };
-			Vec3 col = _shade(*tri.material, world, normal, uv, tri.front);
+			const Vec3 vcol = (a.color_w * l0 + b.color_w * l1 + c.color_w * l2) * w;
+			Vec3 col = _shade(*tri.material, world, normal, uv, tri.front, vcol);
 			col = tonemap(col * env.exposure);
 			if (env.fog) {
 				const float dist = (world - camera.position).length();

@@ -15,6 +15,7 @@ struct Mesh {
 	std::vector<Vec3> positions;
 	std::vector<Vec3> normals;
 	std::vector<Vec2> uvs;
+	std::vector<Vec3> colors; // Optional per-vertex colors (linear), multiplied with the material color.
 	std::vector<uint32_t> indices; // Triangles.
 	Vec3 aabb_min;
 	Vec3 aabb_max;
@@ -34,6 +35,10 @@ std::shared_ptr<Mesh> cylinder(int p_segments = 24);
 std::shared_ptr<Mesh> cone(int p_segments = 24);
 std::shared_ptr<Mesh> torus(int p_rings = 24, int p_segments = 12);
 std::shared_ptr<Mesh> capsule(int p_rings = 8, int p_segments = 20);
+
+// Decorations with per-vertex colors (use a white material to keep their colors).
+std::shared_ptr<Mesh> tree(int p_seed); // Pine tree: trunk and layered crown.
+std::shared_ptr<Mesh> rock(int p_seed); // Faceted rock.
 
 // Hilly terrain (heightfield) in the unit box; the shape depends on p_seed. Cached.
 constexpr int TERRAIN_RES = 64; // Grid cells per side.
