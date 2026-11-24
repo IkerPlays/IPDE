@@ -80,6 +80,8 @@ Json Scene::to_json() const {
 	j["name"] = name;
 	j["mode"] = is_3d ? "3d" : "2d";
 	j["background"] = color_to_hex(background);
+	j["platformer"] = platformer;
+	j["gravity_2d"] = (double)gravity_2d;
 
 	Json env = Json::object();
 	env["sky_top"] = color_to_hex(environment.sky_top);
@@ -135,6 +137,9 @@ Json Scene::to_json() const {
 		je["emission"] = (double)e.emission;
 		je["model"] = e.model;
 		je["texture"] = e.texture;
+		if (e.flip_x) {
+			je["flip_x"] = true;
+		}
 		je["uv_scale"] = (double)e.uv_scale;
 		je["light_energy"] = (double)e.light_energy;
 		je["light_range"] = (double)e.light_range;
@@ -173,6 +178,8 @@ Scene Scene::from_json(const Json &p_json) {
 	s.name = p_json["name"].as_string("Main");
 	s.is_3d = p_json["mode"].as_string("2d") == "3d";
 	s.background = color_from_hex(p_json["background"].as_string(), s.background);
+	s.platformer = p_json["platformer"].as_bool(false);
+	s.gravity_2d = (float)p_json["gravity_2d"].as_number(s.gravity_2d);
 
 	const Json &env = p_json["environment"];
 	Environment &e = s.environment;
@@ -225,6 +232,7 @@ Scene Scene::from_json(const Json &p_json) {
 		en.emission = (float)je["emission"].as_number(en.emission);
 		en.model = je["model"].as_string();
 		en.texture = je["texture"].as_string();
+		en.flip_x = je["flip_x"].as_bool(false);
 		en.uv_scale = (float)je["uv_scale"].as_number(1.0);
 		en.light_energy = (float)je["light_energy"].as_number(en.light_energy);
 		en.light_range = (float)je["light_range"].as_number(en.light_range);
@@ -334,6 +342,7 @@ bool Project::load(const std::string &p_folder, Project &r_project) {
 
 static Scene example_scene_2d(const std::string &p_name) {
 	Scene s;
+	s.platformer = true;
 	Entity ground;
 	ground.name = "Suelo";
 	ground.x = 0;
@@ -385,7 +394,7 @@ static Scene example_scene_2d(const std::string &p_name) {
 	enemy.name = "Enemigo";
 	enemy.type = EntityType::CIRCLE;
 	enemy.x = 300;
-	enemy.y = -80;
+	enemy.y = 178;
 	enemy.width = 44;
 	enemy.color = 0xFFFF4D5E;
 	enemy.chase_speed = 90;

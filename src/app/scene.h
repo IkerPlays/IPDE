@@ -52,7 +52,8 @@ struct Entity {
 	float metallic = 0.0f;
 	float emission = 0.0f; // Glow strength (uses the color).
 	std::string model; // Path relative to the project (MODEL).
-	std::string texture; // Optional PNG, relative to the project.
+	std::string texture; // Optional PNG, relative to the project. In 2D, rectangles become sprites.
+	bool flip_x = false; // 2D sprite mirrored horizontally (players face where they walk).
 	float uv_scale = 1.0f;
 	// Lights.
 	float light_energy = 2.0f;
@@ -101,6 +102,8 @@ struct Scene {
 	std::string name = "Main";
 	bool is_3d = false;
 	uint32_t background = 0xFF1B1D2E; // 2D background.
+	bool platformer = false; // 2D: gravity and jumping (side view) instead of top-down movement.
+	float gravity_2d = 1800.0f; // Pixels per second squared.
 	Environment environment; // 3D.
 	// 3D default camera (used when no entity has camera_follow).
 	float camera_x = 0, camera_y = 4, camera_z = 10;

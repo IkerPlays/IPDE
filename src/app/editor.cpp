@@ -59,6 +59,7 @@ static EditorState g_ed;
 static Renderer3D g_r3d;
 static SceneRenderer3D g_scene_r3d;
 static ImTextureID g_view_tex = ImTextureID_Invalid;
+static SpriteCache g_sprites; // 2D sprites shown in the viewport.
 
 bool editor_has_unsaved_changes() {
 	return g_ed.dirty;
@@ -87,6 +88,9 @@ void editor_open(App &p_app) {
 	g_ed = EditorState();
 	meshes::clear_cache();
 	g_scene_r3d = SceneRenderer3D();
+	g_sprites.clear();
+	g_sprites.renderer = &p_app.renderer;
+	g_sprites.project_dir = p_app.project.path;
 	load_level(p_app, p_app.project.scenes.empty() ? std::string("main.scene") : p_app.project.scenes[0]);
 }
 
@@ -891,6 +895,11 @@ static void draw_environment(App &p_app) {
 	if (!sc.is_3d) {
 		ImGui::SeparatorText("Escena");
 		color_edit("Fondo", &sc.background);
+		checkbox("Modo plataformas", &sc.platformer);
+		ui::dim_text(sc.platformer ? "Vista lateral: el jugador cae por la gravedad y salta con Espacio, W o la flecha arriba." : "Vista cenital: el jugador se mueve libremente con WASD.");
+		if (sc.platformer) {
+			drag_float("Gravedad", &sc.gravity_2d, 10.0f, 0, 20000, "%.0f px/s²");
+		}
 		draw_audio_settings(p_app);
 		ImGui::Spacing();
 		ui::dim_text("Selecciona una entidad para editarla.");
@@ -1009,6 +1018,28 @@ static void draw_inspector(App &p_app) {
 	if (e.type == EntityType::LIGHT) {
 		drag_float("Energía", &e.light_energy, 0.02f, 0, 50, "%.2f");
 		drag_float("Alcance", &e.light_range, 0.05f, 0.1f, 200, "%.1f m");
+	} else if (e.type == EntityType::RECT) {
+		text_field("Imagen (PNG)", e.texture);
+		if (ImGui::Button("Importar imagen...")) {
+			const std::string rel = import_asset(p_app, "Importar imagen", "Imágenes PNG", "*.png");
+			if (!rel.empty()) {
+				e.texture = rel;
+				e.color = 0xFFFFFFFF; // Show the image with its own colors.
+				g_ed.dirty = true;
+			}
+		}
+		if (!e.texture.empty()) {
+			ImGui::SameLine();
+			if (ImGui::Button("Quitar")) {
+				e.texture.clear();
+				g_ed.dirty = true;
+			}
+			checkbox("Voltear horizontalmente", &e.flip_x);
+			if (g_sprites.get(e.texture) == ImTextureID_Invalid) {
+				ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(theme::DANGER), "No se pudo cargar la imagen.");
+			}
+			ui::dim_text("El color tiñe la imagen (blanco = colores originales).");
+		}
 	} else if (is3d) {
 		ImGui::SliderFloat("Rugosidad", &e.roughness, 0.0f, 1.0f, "%.2f");
 		if (ImGui::IsItemEdited()) {
@@ -1065,7 +1096,7 @@ static void draw_inspector(App &p_app) {
 		checkbox("Coleccionable", &e.collectible);
 		checkbox("Peligroso (reinicia al jugador)", &e.hazard);
 		checkbox("Meta (completa el nivel)", &e.goal);
-		if (is3d) {
+		if (is3d || g_ed.scene.platformer) {
 			drag_float("Trampolín", &e.bounce, 0.1f, 0, 100, e.bounce > 0 ? "%.1f m/s" : "No");
 		}
 		{
@@ -1125,6 +1156,8 @@ static void draw_inspector(App &p_app) {
 				if (e.can_jump) {
 					drag_float("Fuerza de salto", &e.jump_force, 0.05f, 0, 100, "%.1f");
 				}
+			} else if (g_ed.scene.platformer) {
+				drag_float("Fuerza de salto", &e.jump_force, 0.05f, 0, 100, "%.1f");
 			}
 			ui::dim_text(is3d ? "Se mueve con WASD o las flechas, salta con Espacio y choca con lo sólido." : "Se mueve con WASD o las flechas y choca con las formas sólidas.");
 		}
@@ -1296,7 +1329,7 @@ static void draw_viewport_2d(App &p_app, float p_width) {
 	// Game view frame (1280x720 centered on the origin, like the default camera).
 	dl->AddRect(ImVec2(origin.x - 640 * g_ed.zoom, origin.y - 360 * g_ed.zoom), ImVec2(origin.x + 640 * g_ed.zoom, origin.y + 360 * g_ed.zoom), IM_COL32(255, 255, 255, 60), 0, 0, 1.5f);
 
-	draw_scene(dl, g_ed.scene, origin, g_ed.zoom, p_app.font, 0.0, false);
+	draw_scene(dl, g_ed.scene, origin, g_ed.zoom, p_app.font, 0.0, false, &g_sprites);
 
 	// Selection outline.
 	if (g_ed.selected >= 0 && g_ed.selected < (int)g_ed.scene.entities.size()) {

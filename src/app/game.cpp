@@ -9,6 +9,7 @@
 
 #include <imgui.h>
 #include <imgui_internal.h>
+#include <stb/stb_image.h>
 
 #include <algorithm>
 #include <map>
@@ -41,7 +42,38 @@ static void entity_animated_transform(const Entity &p_e, double p_time, bool p_a
 	}
 }
 
-void draw_scene(ImDrawList *p_dl, const Scene &p_scene, ImVec2 p_origin, float p_zoom, ImFont *p_font, double p_time, bool p_animate) {
+ImTextureID SpriteCache::get(const std::string &p_relative) {
+	if (p_relative.empty() || !renderer) {
+		return ImTextureID_Invalid;
+	}
+	auto it = textures.find(p_relative);
+	if (it != textures.end()) {
+		return it->second;
+	}
+	ImTextureID id = ImTextureID_Invalid;
+	std::string data;
+	if (fs::read_file(fs::join(project_dir, p_relative), data)) {
+		int w = 0, h = 0, n = 0;
+		unsigned char *px = stbi_load_from_memory((const unsigned char *)data.data(), (int)data.size(), &w, &h, &n, 4);
+		if (px) {
+			id = renderer->create_texture(px, w, h);
+			stbi_image_free(px);
+		}
+	}
+	textures[p_relative] = id;
+	return id;
+}
+
+void SpriteCache::clear() {
+	for (auto &it : textures) {
+		if (it.second != ImTextureID_Invalid && renderer) {
+			renderer->destroy_texture(it.second);
+		}
+	}
+	textures.clear();
+}
+
+void draw_scene(ImDrawList *p_dl, const Scene &p_scene, ImVec2 p_origin, float p_zoom, ImFont *p_font, double p_time, bool p_animate, SpriteCache *p_sprites) {
 	for (const Entity &e : p_scene.entities) {
 		if (!e.visible || entity_type_is_3d(e.type)) {
 			continue;
@@ -58,7 +90,14 @@ void draw_scene(ImDrawList *p_dl, const Scene &p_scene, ImVec2 p_origin, float p
 				const float cs = std::cos(r);
 				const float sn = std::sin(r);
 				auto corner = [&](float px, float py) { return ImVec2(c.x + px * cs - py * sn, c.y + px * sn + py * cs); };
-				p_dl->AddQuadFilled(corner(-hw, -hh), corner(hw, -hh), corner(hw, hh), corner(-hw, hh), color);
+				const ImTextureID tex = p_sprites ? p_sprites->get(e.texture) : ImTextureID_Invalid;
+				if (tex != ImTextureID_Invalid) {
+					// Sprite: flipped horizontally with a negative width.
+					const float u0 = e.flip_x ? 1.0f : 0.0f;
+					p_dl->AddImageQuad(ImTextureRef(tex), corner(-hw, -hh), corner(hw, -hh), corner(hw, hh), corner(-hw, hh), ImVec2(u0, 0), ImVec2(1 - u0, 0), ImVec2(1 - u0, 1), ImVec2(u0, 1), color);
+				} else {
+					p_dl->AddQuadFilled(corner(-hw, -hh), corner(hw, -hh), corner(hw, hh), corner(-hw, hh), color);
+				}
 			} break;
 			case EntityType::CIRCLE:
 				p_dl->AddCircleFilled(c, std::max(1.0f, e.width * 0.5f * p_zoom), color);
@@ -555,6 +594,13 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 	double all2d_time = 0;
 	GameStatus status2d;
 	std::vector<Entity> initial2d;
+	float vel2d_y = 0.0f; // Platformer mode.
+	bool on_ground2d = false;
+	int ground2d = -1;
+	double prev_t2d = 0.0;
+	SpriteCache sprites;
+	sprites.renderer = &renderer;
+	sprites.project_dir = project.path;
 
 	// Levels: the project's scenes are played in order.
 	size_t level = 0;
@@ -582,6 +628,10 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 		all2d_time = 0;
 		status2d = GameStatus();
 		initial2d = ents;
+		vel2d_y = 0.0f;
+		on_ground2d = false;
+		ground2d = -1;
+		prev_t2d = 0.0;
 		for (const Entity &e : ents) {
 			if (e.collectible && e.visible) {
 				total2d++;
@@ -675,6 +725,7 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 			platform::present(renderer.get_pixels(), w, h);
 		} else {
 			// Player movement with simple collisions against solid shapes.
+			// Top-down: WASD moves freely. Platformer: A/D walk, gravity pulls down, Space/W jumps.
 			float mx = 0, my = 0;
 			if (ImGui::IsKeyDown(ImGuiKey_A) || ImGui::IsKeyDown(ImGuiKey_LeftArrow)) {
 				mx -= 1;
@@ -682,17 +733,20 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 			if (ImGui::IsKeyDown(ImGuiKey_D) || ImGui::IsKeyDown(ImGuiKey_RightArrow)) {
 				mx += 1;
 			}
-			if (ImGui::IsKeyDown(ImGuiKey_W) || ImGui::IsKeyDown(ImGuiKey_UpArrow)) {
-				my -= 1;
+			if (!scene.platformer) {
+				if (ImGui::IsKeyDown(ImGuiKey_W) || ImGui::IsKeyDown(ImGuiKey_UpArrow)) {
+					my -= 1;
+				}
+				if (ImGui::IsKeyDown(ImGuiKey_S) || ImGui::IsKeyDown(ImGuiKey_DownArrow)) {
+					my += 1;
+				}
+				const float len = std::sqrt(mx * mx + my * my);
+				if (len > 0) {
+					mx /= len;
+					my /= len;
+				}
 			}
-			if (ImGui::IsKeyDown(ImGuiKey_S) || ImGui::IsKeyDown(ImGuiKey_DownArrow)) {
-				my += 1;
-			}
-			const float len = std::sqrt(mx * mx + my * my);
-			if (len > 0) {
-				mx /= len;
-				my /= len;
-			}
+			const bool jump_pressed = ImGui::IsKeyPressed(ImGuiKey_Space, false) || ImGui::IsKeyPressed(ImGuiKey_W, false) || ImGui::IsKeyPressed(ImGuiKey_UpArrow, false);
 			for (Entity &p : ents) {
 				if (!p.player || status2d.goal_time > 0) {
 					continue;
@@ -702,21 +756,72 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 					if (e.chase_speed == 0.0f || !e.visible) {
 						continue;
 					}
-					const float dx = p.x - e.x, dy = p.y - e.y;
+					const float dx = p.x - e.x, dy = scene.platformer ? 0.0f : p.y - e.y;
 					const float dist = std::sqrt(dx * dx + dy * dy);
 					if (dist < e.chase_range && dist > 0.5f) {
 						e.x += dx / dist * e.chase_speed * dt;
 						e.y += dy / dist * e.chase_speed * dt;
 					}
 				}
+				if (mx != 0) {
+					p.flip_x = mx < 0; // Face where it walks.
+				}
+				float dy_move = my * p.player_speed * dt;
+				if (scene.platformer) {
+					// Ride moving platforms.
+					if (on_ground2d && ground2d >= 0 && ground2d < (int)ents.size()) {
+						float ax, ay, ar, bx, by, br;
+						entity_animated_transform(ents[ground2d], t, true, ax, ay, ar);
+						entity_animated_transform(ents[ground2d], prev_t2d, true, bx, by, br);
+						p.x += ax - bx;
+						p.y += ay - by;
+					}
+					if (on_ground2d && jump_pressed) {
+						vel2d_y = -p.jump_force * 110.0f;
+						on_ground2d = false;
+						g_audio.play(nullptr, audio::sfx::jump());
+					}
+					vel2d_y = std::min(vel2d_y + scene.gravity_2d * dt, 2400.0f);
+					dy_move = vel2d_y * dt;
+				}
+				// Moving solids that ran into the player push it out along the shortest way.
+				{
+					Box pb = entity_box(p, Vec3(p.x, p.y, 0));
+					for (const Entity &o : ents) {
+						if (&o == &p || !is_solid_2d(o) || (!o.has_motion() && o.bob_amplitude == 0.0f)) {
+							continue;
+						}
+						float ox, oy, orot;
+						entity_animated_transform(o, t, true, ox, oy, orot);
+						const Box ob = entity_box(o, Vec3(ox, oy, 0));
+						if (!pb.overlaps(ob)) {
+							continue;
+						}
+						const float push[4] = { ob.min.x - pb.max.x, ob.max.x - pb.min.x, ob.min.y - pb.max.y, ob.max.y - pb.min.y };
+						int best = 0;
+						for (int k = 1; k < 4; k++) {
+							if (k == 3 && scene.platformer && on_ground2d) {
+								continue; // Standing on the floor: can't be pushed down, so go sideways.
+							}
+							if (std::fabs(push[k]) < std::fabs(push[best])) {
+								best = k;
+							}
+						}
+						(best < 2 ? p.x : p.y) += push[best];
+						pb = entity_box(p, Vec3(p.x, p.y, 0));
+					}
+				}
+				bool landed = false;
+				int landed_on = -1;
 				for (int axis = 0; axis < 2; axis++) {
-					const float delta = (axis == 0 ? mx : my) * p.player_speed * dt;
+					const float delta = axis == 0 ? mx * p.player_speed * dt : dy_move;
 					if (delta == 0) {
 						continue;
 					}
 					(axis == 0 ? p.x : p.y) += delta;
 					Box pb = entity_box(p, Vec3(p.x, p.y, 0));
-					for (const Entity &o : ents) {
+					for (size_t oi = 0; oi < ents.size(); oi++) {
+						const Entity &o = ents[oi];
 						if (&o == &p || !is_solid_2d(o)) {
 							continue;
 						}
@@ -728,11 +833,32 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 								p.x += delta > 0 ? (ob.min.x - pb.max.x) : (ob.max.x - pb.min.x);
 							} else {
 								p.y += delta > 0 ? (ob.min.y - pb.max.y) : (ob.max.y - pb.min.y);
+								if (scene.platformer) {
+									if (delta > 0) {
+										landed = true;
+										landed_on = (int)oi;
+										if (o.bounce > 0.0f) {
+											vel2d_y = -o.bounce * 110.0f; // Jump pad.
+											landed = false;
+											g_audio.play(&o, audio::sfx::bounce());
+										} else {
+											vel2d_y = 0;
+										}
+									} else {
+										vel2d_y = 0; // Bumped the head.
+									}
+								}
 							}
 							pb = entity_box(p, Vec3(p.x, p.y, 0));
 						}
 					}
 				}
+				if (scene.platformer) {
+					on_ground2d = landed;
+					ground2d = landed_on;
+				}
+				prev_t2d = t;
+				const bool fell = scene.platformer && p.y > 5000.0f; // Fell off the world.
 				// Collectibles.
 				const Box pb = entity_box(p, Vec3(p.x, p.y, 0));
 				for (Entity &o : ents) {
@@ -769,7 +895,9 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 						break;
 					}
 				}
-				if (died) {
+				if (died || fell) {
+					vel2d_y = 0;
+					on_ground2d = false;
 					status2d.deaths++;
 					status2d.death_flash = t;
 					g_audio.play(nullptr, audio::sfx::hurt());
@@ -791,7 +919,7 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 					break;
 				}
 			}
-			draw_scene(ImGui::GetBackgroundDrawList(), scene, origin, 1.0f, font, t, true);
+			draw_scene(ImGui::GetBackgroundDrawList(), scene, origin, 1.0f, font, t, true, &sprites);
 			draw_hud(font, score2d, total2d, all2d_time, t, w);
 			draw_status(font, status2d, t, w, h, level + 1 < project.scenes.size());
 			ImGui::Render();
@@ -809,6 +937,7 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 	}
 
 	audio::shutdown();
+	sprites.clear();
 	renderer.shutdown();
 	ImGui::DestroyContext();
 	platform::destroy_window();
