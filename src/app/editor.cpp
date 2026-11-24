@@ -385,7 +385,7 @@ static void add_entity(EntityType p_type) {
 }
 
 // Ready-made game objects for the "Add" menu.
-enum class Preset { COIN, ENEMY, MOVING_PLATFORM, JUMP_PAD, GOAL, SPIKES, CHECKPOINT, SWITCH, DOOR, PLAYER, COUNT };
+enum class Preset { COIN, ENEMY, MOVING_PLATFORM, JUMP_PAD, GOAL, SPIKES, CHECKPOINT, SWITCH, DOOR, PLAYER, WATER, LAVA, COUNT };
 
 static const char *preset_name(Preset p_preset) {
 	switch (p_preset) {
@@ -399,6 +399,8 @@ static const char *preset_name(Preset p_preset) {
 		case Preset::SWITCH: return "Interruptor";
 		case Preset::DOOR: return "Puerta";
 		case Preset::PLAYER: return "Jugador";
+		case Preset::WATER: return "Agua";
+		case Preset::LAVA: return "Lava (peligrosa)";
 		default: return "";
 	}
 }
@@ -547,6 +549,23 @@ static void add_preset(Preset p_preset) {
 			e.player = true;
 			e.camera_follow = is3d;
 			break;
+		case Preset::WATER:
+		case Preset::LAVA: {
+			const bool lava = p_preset == Preset::LAVA;
+			if (is3d) {
+				set3d(EntityType::CUBE, 10, 0.3f, 10, -0.1f);
+				e.pattern = lava ? Material3D::PATTERN_LAVA : Material3D::PATTERN_WATER;
+				e.pattern_scale = lava ? 1.5f : 2.0f;
+				e.roughness = lava ? 0.7f : 0.08f;
+				e.emission = lava ? 0.35f : 0.0f;
+			} else {
+				set2d(EntityType::RECT, 300, 40);
+			}
+			e.color = lava ? 0xFFFF5A1E : 0xFF2E7BD6;
+			e.solid = false;
+			e.hazard = lava;
+			break;
+		}
 		default:
 			break;
 	}
@@ -896,7 +915,7 @@ static void draw_viewport_3d(App &p_app, float p_width) {
 	g_r3d.resize(w, h);
 	const Camera3D cam = editor_camera();
 	const double t = g_ed.preview_animation ? platform::get_time() - g_ed.preview_start : 0.0;
-	g_r3d.begin(cam, SceneRenderer3D::make_environment(g_ed.scene), SceneRenderer3D::make_lights(g_ed.scene, t, g_ed.preview_animation));
+	g_r3d.begin(cam, SceneRenderer3D::make_environment(g_ed.scene, t), SceneRenderer3D::make_lights(g_ed.scene, t, g_ed.preview_animation));
 	g_scene_r3d.draw(g_r3d, g_ed.scene, p_app.project.path, t, g_ed.preview_animation, true);
 	if (g_ed.show_grid) {
 		for (int i = -20; i <= 20; i++) {
@@ -1437,7 +1456,7 @@ static void draw_inspector(App &p_app) {
 		}
 		drag_float("Brillo propio", &e.emission, 0.02f, 0, 20, "%.2f");
 		{
-			const char *patterns[] = { "Ninguno", "Cuadros", "Ladrillos", "Rayas", "Baldosas", "Ruido" };
+			const char *patterns[] = { "Ninguno", "Cuadros", "Ladrillos", "Rayas", "Baldosas", "Ruido", "Agua (animada)", "Lava (animada)" };
 			if (ImGui::Combo("Patrón", &e.pattern, patterns, IM_ARRAYSIZE(patterns))) {
 				g_ed.dirty = true;
 			}

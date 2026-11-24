@@ -8,7 +8,7 @@
 
 namespace ipde {
 
-Environment3D SceneRenderer3D::make_environment(const Scene &p_scene) {
+Environment3D SceneRenderer3D::make_environment(const Scene &p_scene, double p_time) {
 	const Environment &e = p_scene.environment;
 	Environment3D env;
 	env.sky_top = argb_to_linear(e.sky_top);
@@ -25,6 +25,7 @@ Environment3D SceneRenderer3D::make_environment(const Scene &p_scene) {
 	env.fog = e.fog;
 	env.fog_start = e.fog_start;
 	env.fog_end = e.fog_end;
+	env.time = (float)p_time;
 	return env;
 }
 

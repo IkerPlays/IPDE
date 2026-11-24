@@ -794,7 +794,7 @@ struct Game3D {
 		cam.position = cam_pos;
 		cam.target = cam_target;
 		cam.fov = scene.camera_fov;
-		renderer.begin(cam, SceneRenderer3D::make_environment(scene), SceneRenderer3D::make_lights(scene, t, true));
+		renderer.begin(cam, SceneRenderer3D::make_environment(scene, t), SceneRenderer3D::make_lights(scene, t, true));
 		// In first person the player's own body would block the view.
 		const bool hide_player = scene.camera_mode == 1 && follow >= 0 && follow == player;
 		if (hide_player) {

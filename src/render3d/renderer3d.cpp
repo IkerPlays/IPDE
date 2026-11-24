@@ -430,7 +430,7 @@ static float value_noise(float p_x, float p_y) {
 }
 
 // Brightness factor of a procedural pattern at a point (planar projection on the dominant axis).
-static float pattern_factor(const Material3D &p_mat, const Vec3 &p_world, const Vec3 &p_normal) {
+static float pattern_factor(const Material3D &p_mat, const Vec3 &p_world, const Vec3 &p_normal, float p_time) {
 	const Vec3 p = (p_world - p_mat.pattern_origin) * (1.0f / std::max(0.01f, p_mat.pattern_scale));
 	const float ax = std::fabs(p_normal.x), ay = std::fabs(p_normal.y), az = std::fabs(p_normal.z);
 	float u, v;
@@ -468,6 +468,18 @@ static float pattern_factor(const Material3D &p_mat, const Vec3 &p_world, const 
 			}
 			return 0.93f + 0.07f * hash2((int)std::floor(u), (int)std::floor(v));
 		}
+		case Material3D::PATTERN_WATER: {
+			// Two layers of noise drifting in different directions.
+			const float a = value_noise(u * 1.5f + p_time * 0.35f, v * 1.5f + p_time * 0.2f);
+			const float b = value_noise(u * 3.1f - p_time * 0.25f, v * 3.1f + p_time * 0.3f);
+			return 0.8f + 0.35f * (a * 0.6f + b * 0.4f);
+		}
+		case Material3D::PATTERN_LAVA: {
+			const float a = value_noise(u * 1.2f + p_time * 0.12f, v * 1.2f - p_time * 0.08f);
+			const float b = value_noise(u * 2.7f - p_time * 0.1f, v * 2.7f + p_time * 0.15f);
+			const float f = a * 0.6f + b * 0.4f;
+			return 0.45f + 1.1f * f * f;
+		}
 		case Material3D::PATTERN_NOISE:
 			return 0.7f + 0.3f * (value_noise(u * 2.0f, v * 2.0f) * 0.65f + value_noise(u * 6.0f, v * 6.0f) * 0.35f);
 		default:
@@ -480,8 +492,18 @@ Vec3 Renderer3D::_shade(const Material3D &p_mat, const Vec3 &p_world, Vec3 p_nor
 	if (p_mat.texture) {
 		albedo = albedo * p_mat.texture->sample(p_uv.x * p_mat.uv_scale, p_uv.y * p_mat.uv_scale);
 	}
+	float lava_glow = 0.0f;
 	if (p_mat.pattern != Material3D::PATTERN_NONE) {
-		float f = pattern_factor(p_mat, p_world, p_normal);
+		float f = pattern_factor(p_mat, p_world, p_normal, env.time);
+		if (p_mat.pattern == Material3D::PATTERN_LAVA) {
+			lava_glow = std::max(0.0f, f - 0.7f) * 2.5f; // Bright veins glow.
+		} else if (p_mat.pattern == Material3D::PATTERN_WATER) {
+			// Ripples: tilt the normal with the animated noise so highlights sparkle.
+			const Vec3 q = (p_world - p_mat.pattern_origin) * (1.0f / std::max(0.01f, p_mat.pattern_scale));
+			const float dx = value_noise(q.x * 2.0f + env.time * 0.5f, q.z * 2.0f) - 0.5f;
+			const float dz = value_noise(q.x * 2.0f + 7.3f, q.z * 2.0f - env.time * 0.45f) - 0.5f;
+			p_normal = p_normal + Vec3(dx, 0, dz) * 0.5f;
+		}
 		// Fade the contrast with distance to hide aliasing.
 		const float dist = (p_world - camera.position).length();
 		const float fade = std::clamp(1.0f - (dist / std::max(0.01f, p_mat.pattern_scale) - 25.0f) / 40.0f, 0.0f, 1.0f);
@@ -538,7 +560,7 @@ Vec3 Renderer3D::_shade(const Material3D &p_mat, const Vec3 &p_world, Vec3 p_nor
 		result += (albedo * (ndl_p * diffuse_weight) + spec_color * (spec * ndl_p)) * l.color * (l.energy * att);
 	}
 
-	result += p_mat.emission;
+	result += p_mat.emission + albedo * lava_glow;
 	return result;
 }
 

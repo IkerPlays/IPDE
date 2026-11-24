@@ -17,7 +17,7 @@ public:
 	// Entity i gets the picking ID i + 1.
 	void draw(Renderer3D &p_renderer, const Scene &p_scene, const std::string &p_project_dir, double p_time, bool p_animate, bool p_editor);
 
-	static Environment3D make_environment(const Scene &p_scene);
+	static Environment3D make_environment(const Scene &p_scene, double p_time = 0.0);
 	static std::vector<PointLight3D> make_lights(const Scene &p_scene, double p_time, bool p_animate);
 	static Mat4 entity_transform(const Entity &p_e, double p_time, bool p_animate);
 	// 0..1 position along a moving platform's path (smooth back and forth).

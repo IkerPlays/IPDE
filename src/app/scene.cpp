@@ -263,7 +263,7 @@ Scene Scene::from_json(const Json &p_json) {
 		en.flip_x = je["flip_x"].as_bool(false);
 		en.uv_scale = (float)je["uv_scale"].as_number(1.0);
 		en.seed = (int)je["seed"].as_number(1);
-		en.pattern = std::clamp((int)je["pattern"].as_number(0), 0, 5);
+		en.pattern = std::clamp((int)je["pattern"].as_number(0), 0, 7);
 		en.pattern_scale = (float)je["pattern_scale"].as_number(1.0);
 		en.light_energy = (float)je["light_energy"].as_number(en.light_energy);
 		en.light_range = (float)je["light_range"].as_number(en.light_range);
