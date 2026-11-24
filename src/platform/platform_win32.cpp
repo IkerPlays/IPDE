@@ -462,4 +462,31 @@ std::string pick_file(const std::string &p_title, const std::string &p_filter_na
 	return result;
 }
 
+static bool g_fullscreen = false;
+static WINDOWPLACEMENT g_saved_placement = { sizeof(WINDOWPLACEMENT) };
+
+void set_fullscreen(bool p_fullscreen) {
+	if (!g_hwnd || p_fullscreen == g_fullscreen) {
+		return;
+	}
+	const LONG_PTR style = GetWindowLongPtrW(g_hwnd, GWL_STYLE);
+	if (p_fullscreen) {
+		MONITORINFO mi = { sizeof(mi) };
+		if (GetWindowPlacement(g_hwnd, &g_saved_placement) && GetMonitorInfoW(MonitorFromWindow(g_hwnd, MONITOR_DEFAULTTOPRIMARY), &mi)) {
+			SetWindowLongPtrW(g_hwnd, GWL_STYLE, style & ~(LONG_PTR)WS_OVERLAPPEDWINDOW);
+			SetWindowPos(g_hwnd, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right - mi.rcMonitor.left, mi.rcMonitor.bottom - mi.rcMonitor.top, SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+			g_fullscreen = true;
+		}
+	} else {
+		SetWindowLongPtrW(g_hwnd, GWL_STYLE, style | WS_OVERLAPPEDWINDOW);
+		SetWindowPlacement(g_hwnd, &g_saved_placement);
+		SetWindowPos(g_hwnd, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+		g_fullscreen = false;
+	}
+}
+
+bool is_fullscreen() {
+	return g_fullscreen;
+}
+
 } // namespace ipde::platform

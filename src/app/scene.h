@@ -137,6 +137,7 @@ struct Project {
 	std::string engine_version;
 	// Scene files (levels) in play order; the first one is where the game starts.
 	std::vector<std::string> scenes = { "main.scene" };
+	bool start_fullscreen = false; // The game starts in fullscreen (F11 toggles it).
 
 	std::string get_file() const;
 	std::string get_scene_file() const; // First scene.

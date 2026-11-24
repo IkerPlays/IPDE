@@ -1172,6 +1172,12 @@ static void draw_rules_settings() {
 static void draw_audio_settings(App &p_app) {
 	Scene &sc = g_ed.scene;
 	draw_rules_settings();
+	if (ImGui::Checkbox("Empezar en pantalla completa", &p_app.project.start_fullscreen)) {
+		p_app.project.save(); // Project setting (all levels).
+	}
+	if (ImGui::IsItemHovered()) {
+		ImGui::SetTooltip("En el juego, F11 o Alt+Intro cambian entre ventana y pantalla completa.");
+	}
 	ImGui::SeparatorText("Audio");
 	checkbox("Efectos de sonido", &sc.sound_effects);
 	ui::dim_text("Monedas, saltos, trampolines, caídas y meta.");

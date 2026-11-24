@@ -226,7 +226,7 @@ static void draw_status(ImFont *p_font, const GameStatus &p_st, double p_now, in
 
 static void draw_hud(ImFont *p_font, int p_score, int p_total, double p_time_all_collected, double p_now, int p_w) {
 	ImDrawList *fg = ImGui::GetForegroundDrawList();
-	fg->AddText(ImVec2(12, 10), IM_COL32(255, 255, 255, 140), "Esc: pausa  ·  R: reiniciar  ·  F3: estadísticas");
+	fg->AddText(ImVec2(12, 10), IM_COL32(255, 255, 255, 140), "Esc: pausa  ·  R: reiniciar  ·  F11: pantalla completa");
 	if (p_total > 0) {
 		char buf[64];
 		snprintf(buf, sizeof(buf), "Monedas: %d / %d", p_score, p_total);
@@ -806,6 +806,9 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 	ImFont *font = io.Fonts->AddFontFromMemoryTTF((void *)res_font_roboto, (int)res_font_roboto_size, 20.0f, &cfg);
 	ImGui::GetStyle().AntiAliasedLinesUseTex = false;
 
+	if (project.start_fullscreen) {
+		platform::set_fullscreen(true);
+	}
 	audio::init();
 	g_audio.project_dir = project.path;
 
@@ -949,6 +952,9 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 			if (ImGui::Button("Reiniciar nivel", ImVec2(-1, 44))) {
 				restart = true;
 			}
+			if (ImGui::Button(platform::is_fullscreen() ? "Modo ventana" : "Pantalla completa", ImVec2(-1, 44))) {
+				platform::set_fullscreen(!platform::is_fullscreen());
+			}
 			if (ImGui::Button("Salir", ImVec2(-1, 44))) {
 				quit = true;
 			}
@@ -1003,6 +1009,9 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 			}
 		}
 
+		if (ImGui::IsKeyPressed(ImGuiKey_F11, false) || (io.KeyAlt && ImGui::IsKeyPressed(ImGuiKey_Enter, false))) {
+			platform::set_fullscreen(!platform::is_fullscreen());
+		}
 		if (ImGui::IsKeyPressed(ImGuiKey_F3, false)) {
 			show_stats = !show_stats;
 		}

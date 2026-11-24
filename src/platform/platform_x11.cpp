@@ -271,4 +271,27 @@ std::string pick_file(const std::string &p_title, const std::string &p_filter_na
 	return env ? std::string(env) : std::string();
 }
 
+static bool g_fullscreen = false;
+
+void set_fullscreen(bool p_fullscreen) {
+	if (!g_display || !g_window || p_fullscreen == g_fullscreen) {
+		return;
+	}
+	// EWMH: ask the window manager to toggle _NET_WM_STATE_FULLSCREEN.
+	XEvent ev = {};
+	ev.type = ClientMessage;
+	ev.xclient.window = g_window;
+	ev.xclient.message_type = XInternAtom(g_display, "_NET_WM_STATE", False);
+	ev.xclient.format = 32;
+	ev.xclient.data.l[0] = p_fullscreen ? 1 : 0;
+	ev.xclient.data.l[1] = (long)XInternAtom(g_display, "_NET_WM_STATE_FULLSCREEN", False);
+	XSendEvent(g_display, DefaultRootWindow(g_display), False, SubstructureRedirectMask | SubstructureNotifyMask, &ev);
+	XFlush(g_display);
+	g_fullscreen = p_fullscreen;
+}
+
+bool is_fullscreen() {
+	return g_fullscreen;
+}
+
 } // namespace ipde::platform

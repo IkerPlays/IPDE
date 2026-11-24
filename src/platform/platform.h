@@ -23,6 +23,9 @@ void present(const uint32_t *p_pixels, int p_width, int p_height);
 void get_window_size(int &r_width, int &r_height);
 float get_dpi_scale();
 void set_window_title(const std::string &p_title);
+// Borderless fullscreen on the current monitor (false restores the window).
+void set_fullscreen(bool p_fullscreen);
+bool is_fullscreen();
 void set_mouse_cursor(int p_imgui_cursor);
 
 double get_time();

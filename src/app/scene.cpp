@@ -337,6 +337,7 @@ bool Project::save() const {
 		list.push_back(sc);
 	}
 	j["scenes"] = list;
+	j["fullscreen"] = start_fullscreen;
 	return fs::write_file(get_file(), j.dump(true));
 }
 
@@ -352,6 +353,7 @@ bool Project::load(const std::string &p_folder, Project &r_project) {
 	r_project.path = p_folder;
 	r_project.name = j["name"].as_string(fs::get_file_name(p_folder));
 	r_project.engine_version = j["engine_version"].as_string();
+	r_project.start_fullscreen = j["fullscreen"].as_bool(false);
 	r_project.scenes.clear();
 	for (const Json &sc : j["scenes"].get_items()) {
 		const std::string f = sc.as_string();
