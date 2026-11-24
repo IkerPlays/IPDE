@@ -27,7 +27,7 @@ enum class Page {
 static Page g_page = Page::PROJECTS;
 static char g_search[128] = "";
 static char g_new_name[128] = "Mi juego";
-static bool g_new_3d = true;
+static int g_new_template = Project::TEMPLATE_ADVENTURE_3D;
 static char g_new_location[1024] = "";
 static std::string g_new_error;
 static char g_import_path[1024] = "";
@@ -208,7 +208,7 @@ static void open_new_project_popup(App &p_app) {
 
 static void draw_new_project_popup(App &p_app) {
 	const float s = p_app.scale();
-	ImGui::SetNextWindowSize(ImVec2(560 * s, 0));
+	ImGui::SetNextWindowSize(ImVec2(680 * s, 0));
 	if (!ImGui::BeginPopupModal("Nuevo proyecto", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoTitleBar)) {
 		return;
 	}
@@ -221,24 +221,37 @@ static void draw_new_project_popup(App &p_app) {
 		ImGui::SetKeyboardFocusHere();
 	}
 	ImGui::InputText("##name", g_new_name, sizeof(g_new_name));
-	ImGui::TextUnformatted("Tipo de juego");
+	ImGui::TextUnformatted("Plantilla");
 	{
-		const float half = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
-		auto choice = [&](const char *p_title, const char *p_desc, bool p_value) {
-			const bool selected = g_new_3d == p_value;
+		struct Choice {
+			int id;
+			const char *title;
+			const char *desc;
+		};
+		const Choice choices[] = {
+			{ Project::TEMPLATE_ADVENTURE_3D, "Aventura 3D", "Monedas, torre y meta" },
+			{ Project::TEMPLATE_OPEN_WORLD_3D, "Mundo abierto 3D", "Colinas, lago y monedas" },
+			{ Project::TEMPLATE_EMPTY_3D, "3D vacío", "Suelo, jugador y meta" },
+			{ Project::TEMPLATE_PLATFORMER_2D, "Plataformas 2D", "Saltos, enemigo y meta" },
+			{ Project::TEMPLATE_EMPTY_2D, "2D vacío", "Suelo, jugador y meta" },
+		};
+		const float third = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x * 2) / 3.0f;
+		for (int i = 0; i < IM_ARRAYSIZE(choices); i++) {
+			const Choice &c = choices[i];
+			if (i % 3 != 0) {
+				ImGui::SameLine();
+			}
+			const bool selected = g_new_template == c.id;
 			ImGui::PushStyleColor(ImGuiCol_Button, selected ? IM_COL32(108, 123, 255, 70) : IM_COL32(38, 41, 70, 255));
 			ImGui::PushStyleColor(ImGuiCol_Border, selected ? theme::ACCENT : theme::BORDER);
 			ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.5f);
-			const std::string label = std::string(p_title) + "\n" + p_desc;
-			if (ImGui::Button(label.c_str(), ImVec2(half, 58 * s))) {
-				g_new_3d = p_value;
+			const std::string label = std::string(c.title) + "\n" + c.desc + "##tpl" + std::to_string(i);
+			if (ImGui::Button(label.c_str(), ImVec2(third, 58 * s))) {
+				g_new_template = c.id;
 			}
 			ImGui::PopStyleVar();
 			ImGui::PopStyleColor(2);
-		};
-		choice("3D", "Mundo 3D con jugador y saltos", true);
-		ImGui::SameLine();
-		choice("2D", "Escena 2D con formas y textos", false);
+		}
 	}
 	ImGui::TextUnformatted("Ubicación");
 	ImGui::SetNextItemWidth(-110 * s);
@@ -273,7 +286,7 @@ static void draw_new_project_popup(App &p_app) {
 	ImGui::BeginDisabled(!valid);
 	if (ui::accent_button("Crear y abrir", ImVec2(bw, 0)) || (valid && ImGui::IsKeyPressed(ImGuiKey_Enter))) {
 		std::string error;
-		if (Project::create(full, g_new_name, g_new_3d, error)) {
+		if (Project::create(full, g_new_name, g_new_template, error)) {
 			ImGui::CloseCurrentPopup();
 			p_app.open_project(full);
 		} else {

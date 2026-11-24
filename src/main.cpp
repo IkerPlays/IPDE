@@ -117,8 +117,12 @@ int main(int argc, char **argv) {
 	for (size_t i = 0; i + 1 < args.size(); i++) {
 		if (args[i] == "--new") {
 			std::string err;
-			const bool is3d = !(i + 2 < args.size() && args[i + 2] == "2d");
-			if (!Project::create(args[i + 1], fs::get_file_name(args[i + 1]), is3d, err)) {
+			int tpl = Project::TEMPLATE_ADVENTURE_3D;
+			if (i + 2 < args.size()) {
+				const std::string &k = args[i + 2];
+				tpl = k == "2d" ? Project::TEMPLATE_PLATFORMER_2D : (k == "world" ? Project::TEMPLATE_OPEN_WORLD_3D : (k == "empty3d" ? Project::TEMPLATE_EMPTY_3D : (k == "empty2d" ? Project::TEMPLATE_EMPTY_2D : tpl)));
+			}
+			if (!Project::create(args[i + 1], fs::get_file_name(args[i + 1]), tpl, err)) {
 				fprintf(stderr, "%s\n", err.c_str());
 				return 1;
 			}

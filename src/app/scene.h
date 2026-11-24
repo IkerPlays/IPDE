@@ -152,7 +152,8 @@ struct Project {
 	bool save() const;
 	static bool load(const std::string &p_folder, Project &r_project);
 	// Creates the folder, the project file and an example scene (2D or 3D).
-	static bool create(const std::string &p_folder, const std::string &p_name, bool p_3d, std::string &r_error);
+	enum Template { TEMPLATE_ADVENTURE_3D, TEMPLATE_OPEN_WORLD_3D, TEMPLATE_EMPTY_3D, TEMPLATE_PLATFORMER_2D, TEMPLATE_EMPTY_2D, TEMPLATE_COUNT };
+	static bool create(const std::string &p_folder, const std::string &p_name, int p_template, std::string &r_error);
 };
 
 } // namespace ipde

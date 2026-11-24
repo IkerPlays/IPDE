@@ -1,9 +1,11 @@
 #include "app/scene.h"
 
 #include "core/fs.h"
+#include "render3d/mesh.h"
 #include "version.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 
@@ -577,11 +579,10 @@ static Scene example_scene_3d() {
 	return s;
 }
 
-bool Project::add_scene(bool p_3d, std::string &r_file) {
+// A small starting level: ground, player and goal.
+static Scene starter_scene(bool p_3d) {
 	Scene s;
 	s.is_3d = p_3d;
-	r_file = make_scene_file_name();
-	s.name = r_file.substr(0, r_file.size() - 6);
 	if (p_3d) {
 		Entity ground = make3d("Suelo", EntityType::CUBE, 0, -0.25f, 0, 24, 0.5f, 24, 0xFF4B5578);
 		ground.roughness = 0.9f;
@@ -624,6 +625,13 @@ bool Project::add_scene(bool p_3d, std::string &r_file) {
 		goal.solid = false;
 		s.entities.push_back(goal);
 	}
+	return s;
+}
+
+bool Project::add_scene(bool p_3d, std::string &r_file) {
+	r_file = make_scene_file_name();
+	Scene s = starter_scene(p_3d);
+	s.name = r_file.substr(0, r_file.size() - 6);
 	if (!s.save(get_scene_path(r_file))) {
 		return false;
 	}
@@ -631,7 +639,93 @@ bool Project::add_scene(bool p_3d, std::string &r_file) {
 	return save();
 }
 
-bool Project::create(const std::string &p_folder, const std::string &p_name, bool p_3d, std::string &r_error) {
+// Open world: hills, a lake, coins spread over the terrain and a goal on a hill.
+static Scene open_world_scene() {
+	Scene s;
+	s.is_3d = true;
+	s.environment.fog_start = 25.0f;
+	s.environment.fog_end = 90.0f;
+	s.environment.sun_pitch = 38.0f;
+	const int seed = 1 + (int)(fs::now_unix() % 9973);
+	const float size = 60.0f, hills = 9.0f;
+	Entity terrain = make3d("Terreno", EntityType::TERRAIN, 0, hills * 0.5f - 0.5f, 0, size, hills, size, 0xFF5FA855);
+	terrain.seed = seed;
+	terrain.roughness = 0.95f;
+	terrain.pattern = 5;
+	terrain.pattern_scale = 2.0f;
+	s.entities.push_back(terrain);
+	auto ground_at = [&](float x, float z) {
+		return terrain.y + (meshes::terrain_height(seed, x / size + 0.5f, z / size + 0.5f) - 0.5f) * hills;
+	};
+	Entity water = make3d("Lago", EntityType::CUBE, 0, terrain.y - hills * 0.5f + hills * 0.22f, 0, size, 0.3f, size, 0xFF2E7BD6);
+	water.pattern = 6;
+	water.pattern_scale = 2.0f;
+	water.roughness = 0.08f;
+	water.solid = false;
+	s.entities.push_back(water);
+	// Player: the highest point near the center.
+	float best_y = -1e9f, px = 0, pz = 0;
+	for (int i = -4; i <= 4; i++) {
+		for (int j = -4; j <= 4; j++) {
+			const float x = i * 2.0f, z = j * 2.0f, y = ground_at(x, z);
+			if (y > best_y) {
+				best_y = y;
+				px = x;
+				pz = z;
+			}
+		}
+	}
+	Entity player = make3d("Jugador", EntityType::CAPSULE, px, best_y + 1.5f, pz, 1, 2, 1, 0xFF6C7BFF);
+	player.player = true;
+	player.camera_follow = true;
+	player.player_speed = 6.0f;
+	player.roughness = 0.35f;
+	s.entities.push_back(player);
+	// Coins in a ring around the start, at ground height.
+	for (int i = 0; i < 8; i++) {
+		const float a = i / 8.0f * 6.2831853f, r = 12.0f + (i % 2) * 6.0f;
+		const float x = px + std::cos(a) * r, z = pz + std::sin(a) * r;
+		if (std::fabs(x) > size * 0.45f || std::fabs(z) > size * 0.45f) {
+			continue;
+		}
+		Entity coin = make3d(("Moneda " + std::to_string(i + 1)).c_str(), EntityType::TORUS, x, std::max(ground_at(x, z), water.y) + 1.0f, z, 0.8f, 0.8f, 0.8f, 0xFFFFC53D);
+		coin.rot_x = 90;
+		coin.metallic = 1.0f;
+		coin.roughness = 0.25f;
+		coin.spin_speed = 90;
+		coin.bob_amplitude = 0.2f;
+		coin.bob_frequency = 0.6f;
+		coin.collectible = true;
+		coin.solid = false;
+		s.entities.push_back(coin);
+	}
+	// Goal on the highest hill of the whole map.
+	float gy = -1e9f, gx = 0, gz = 0;
+	for (int i = -12; i <= 12; i++) {
+		for (int j = -12; j <= 12; j++) {
+			const float x = i * 2.2f, z = j * 2.2f, y = ground_at(x, z);
+			if (y > gy && (std::fabs(x - px) > 10 || std::fabs(z - pz) > 10)) {
+				gy = y;
+				gx = x;
+				gz = z;
+			}
+		}
+	}
+	Entity goal = make3d("Meta", EntityType::CYLINDER, gx, gy + 1.0f, gz, 0.9f, 2.0f, 0.9f, 0xFF3DDC84);
+	goal.emission = 0.8f;
+	goal.spin_speed = 60;
+	goal.goal = true;
+	goal.solid = false;
+	s.entities.push_back(goal);
+	Entity sign = make3d("Cartel", EntityType::CUBE, px + 2.0f, ground_at(px + 2.0f, pz + 1.0f) + 0.6f, pz + 1.0f, 0.9f, 1.2f, 0.2f, 0xFFB0705A);
+	sign.message = "Explora las colinas, recoge las monedas y sube a la colina más alta para llegar a la meta.";
+	sign.pattern = 3;
+	sign.pattern_scale = 0.3f;
+	s.entities.push_back(sign);
+	return s;
+}
+
+bool Project::create(const std::string &p_folder, const std::string &p_name, int p_template, std::string &r_error) {
 	if (fs::exists(fs::join(p_folder, "project.ipde"))) {
 		r_error = "Ya existe un proyecto en esa carpeta.";
 		return false;
@@ -648,7 +742,14 @@ bool Project::create(const std::string &p_folder, const std::string &p_name, boo
 		r_error = "No se pudo escribir project.ipde.";
 		return false;
 	}
-	const Scene s = p_3d ? example_scene_3d() : example_scene_2d(p_name);
+	Scene s;
+	switch (p_template) {
+		case TEMPLATE_OPEN_WORLD_3D: s = open_world_scene(); break;
+		case TEMPLATE_EMPTY_3D: s = starter_scene(true); break;
+		case TEMPLATE_PLATFORMER_2D: s = example_scene_2d(p_name); break;
+		case TEMPLATE_EMPTY_2D: s = starter_scene(false); break;
+		default: s = example_scene_3d(); break;
+	}
 	if (!s.save(p.get_scene_file())) {
 		r_error = "No se pudo escribir la escena.";
 		return false;
