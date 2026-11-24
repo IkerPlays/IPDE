@@ -115,6 +115,9 @@ struct Scene {
 	float camera_x = 0, camera_y = 4, camera_z = 10;
 	float camera_target_x = 0, camera_target_y = 0, camera_target_z = 0;
 	float camera_fov = 60.0f;
+	// Rules.
+	int lives = 0; // Falls allowed before "game over" (0 = unlimited).
+	bool show_timer = false; // Shows the level time in the HUD.
 	// Audio.
 	std::string music; // WAV file (relative to the project) played in a loop.
 	float music_volume = 0.6f;

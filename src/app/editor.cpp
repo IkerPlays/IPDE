@@ -1160,8 +1160,18 @@ static void sound_field(App &p_app, const char *p_label, std::string &r_path) {
 	ImGui::PopID();
 }
 
+static void draw_rules_settings() {
+	Scene &sc = g_ed.scene;
+	ImGui::SeparatorText("Reglas");
+	if (ImGui::SliderInt("Vidas", &sc.lives, 0, 10, sc.lives == 0 ? "Infinitas" : "%d")) {
+		g_ed.dirty = true;
+	}
+	checkbox("Mostrar cronómetro", &sc.show_timer);
+}
+
 static void draw_audio_settings(App &p_app) {
 	Scene &sc = g_ed.scene;
+	draw_rules_settings();
 	ImGui::SeparatorText("Audio");
 	checkbox("Efectos de sonido", &sc.sound_effects);
 	ui::dim_text("Monedas, saltos, trampolines, caídas y meta.");

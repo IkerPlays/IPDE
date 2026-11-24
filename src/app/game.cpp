@@ -155,7 +155,32 @@ struct GameStatus {
 	double goal_time = 0; // When the goal was reached (0 = not yet).
 	double level_time = 0; // Seconds it took.
 	double death_flash = -10; // Last time the player died.
+	bool game_over = false; // No lives left.
 };
+
+// Lives (hearts) and the level timer, top left under the help line.
+static void draw_rules_hud(ImFont *p_font, const Scene &p_scene, int p_deaths, double p_time, bool p_frozen) {
+	ImDrawList *fg = ImGui::GetForegroundDrawList();
+	float y = 40;
+	if (p_scene.lives > 0) {
+		const int left = std::max(0, p_scene.lives - p_deaths);
+		for (int i = 0; i < p_scene.lives; i++) {
+			const float cx = 26.0f + i * 30.0f, cy = y + 10;
+			const ImU32 c = i < left ? IM_COL32(255, 77, 94, 255) : IM_COL32(255, 255, 255, 60);
+			// Heart: two circles and a triangle.
+			fg->AddCircleFilled(ImVec2(cx - 5, cy - 3), 6.5f, c, 16);
+			fg->AddCircleFilled(ImVec2(cx + 5, cy - 3), 6.5f, c, 16);
+			fg->AddTriangleFilled(ImVec2(cx - 11.3f, cy - 0.5f), ImVec2(cx + 11.3f, cy - 0.5f), ImVec2(cx, cy + 12), c);
+		}
+		y += 34;
+	}
+	if (p_scene.show_timer) {
+		char buf[48];
+		snprintf(buf, sizeof(buf), "%d:%04.1f", (int)(p_time / 60.0), std::fmod(p_time, 60.0));
+		fg->AddText(p_font, 28.0f, ImVec2(15, y + 1), IM_COL32(0, 0, 0, 120), buf);
+		fg->AddText(p_font, 28.0f, ImVec2(14, y), p_frozen ? IM_COL32(61, 220, 132, 255) : IM_COL32(255, 255, 255, 230), buf);
+	}
+}
 
 static void draw_banner(ImFont *p_font, const char *p_msg, const char *p_sub, int p_w, float p_y, ImU32 p_color) {
 	ImDrawList *fg = ImGui::GetForegroundDrawList();
@@ -182,6 +207,10 @@ static void draw_status(ImFont *p_font, const GameStatus &p_st, double p_now, in
 	if (p_now - p_st.death_flash < 0.35) {
 		const int a = (int)(140 * (1.0 - (p_now - p_st.death_flash) / 0.35));
 		fg->AddRectFilled(ImVec2(0, 0), ImVec2((float)p_w, (float)p_h), IM_COL32(255, 40, 60, a));
+	}
+	if (p_st.game_over) {
+		draw_banner(p_font, "Fin del juego", "Te has quedado sin vidas   ·   R para intentarlo otra vez", p_w, (float)p_h * 0.38f, IM_COL32(255, 77, 94, 255));
+		return;
 	}
 	if (p_st.goal_time > 0) {
 		char sub[128];
@@ -889,9 +918,13 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 			show_stats = !show_stats;
 		}
 		if (scene.is_3d) {
-			if (!paused) {
+			if (!paused && !game3d.status.game_over) {
 				game3d.update(dt, t);
+				if (scene.lives > 0 && game3d.status.deaths >= scene.lives) {
+					game3d.status.game_over = true;
+				}
 			}
+			draw_rules_hud(font, scene, game3d.status.deaths, game3d.status.goal_time > 0 ? game3d.status.level_time : t, game3d.status.goal_time > 0);
 			draw_hud(font, game3d.score, game3d.total, game3d.all_collected_time, t, w);
 			draw_status(font, game3d.status, t, w, h, level + 1 < project.scenes.size());
 			draw_level_intro();
@@ -919,7 +952,7 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 			renderer.render(ImGui::GetDrawData());
 			platform::present(renderer.get_pixels(), w, h);
 		} else {
-			if (!paused) {
+			if (!paused && !status2d.game_over) {
 			// Player movement with simple collisions against solid shapes.
 			// Top-down: WASD moves freely. Platformer: A/D walk, gravity pulls down, Space/W jumps.
 			float mx = 0, my = 0;
@@ -1156,6 +1189,10 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 				ImGui::GetBackgroundDrawList()->AddCircleFilled(ImVec2(origin.x + fp.pos.x, origin.y + fp.pos.y), fp.size * (0.4f + 0.6f * fp.life / fp.max_life), to_imgui_color(c), 8);
 			}
 			draw_hud(font, score2d, total2d, all2d_time, t, w);
+			if (scene.lives > 0 && status2d.deaths >= scene.lives) {
+				status2d.game_over = true;
+			}
+			draw_rules_hud(font, scene, status2d.deaths, status2d.goal_time > 0 ? status2d.level_time : t, status2d.goal_time > 0);
 			draw_status(font, status2d, t, w, h, level + 1 < project.scenes.size());
 			draw_level_intro();
 			ImGui::Render();
