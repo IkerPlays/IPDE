@@ -157,8 +157,19 @@ static bool is_solid_2d(const Entity &p_e) {
 }
 
 // 3D: moving and bobbing objects are solid too (they carry the player).
+// Height of a terrain's surface (world units) under p_x, p_z. False when outside it.
+static bool terrain_ground(const Entity &p_t, float p_x, float p_z, float &r_y) {
+	const float u = (p_x - p_t.x) / std::max(0.01f, p_t.width) + 0.5f;
+	const float v = (p_z - p_t.z) / std::max(0.01f, p_t.depth) + 0.5f;
+	if (u < 0 || u > 1 || v < 0 || v > 1) {
+		return false;
+	}
+	r_y = p_t.y + (meshes::terrain_height(p_t.seed, u, v) - 0.5f) * p_t.height;
+	return true;
+}
+
 static bool is_solid_3d(const Entity &p_e) {
-	return p_e.visible && p_e.solid && !p_e.player && !p_e.collectible && !p_e.goal && p_e.chase_speed == 0.0f && p_e.type != EntityType::LIGHT && p_e.spin_speed == 0.0f;
+	return p_e.type != EntityType::TERRAIN && p_e.visible && p_e.solid && !p_e.player && !p_e.collectible && !p_e.goal && p_e.chase_speed == 0.0f && p_e.type != EntityType::LIGHT && p_e.spin_speed == 0.0f;
 }
 
 struct GameStatus {
@@ -490,6 +501,12 @@ struct Game3D {
 					d = d * (1.0f / dist);
 					e.x += d.x * e.chase_speed * dt;
 					e.z += d.z * e.chase_speed * dt;
+					for (const Entity &t : scene.entities) {
+						float gy;
+						if (t.type == EntityType::TERRAIN && t.visible && terrain_ground(t, e.x, e.z, gy)) {
+							e.y = gy + e.height * 0.5f;
+						}
+					}
 					e.rot_y = std::atan2(d.x, d.z) / DEG2RAD;
 				}
 			}
@@ -582,6 +599,24 @@ struct Game3D {
 						velocity_y = 0;
 					}
 					pb = entity_box(p, pos);
+				}
+			}
+			// Terrain: stand on its surface (walking up hills too).
+			{
+				const Box pbox = entity_box(p, pos);
+				const float half = (pbox.max.y - pbox.min.y) * 0.5f;
+				for (const Entity &o : scene.entities) {
+					float gy;
+					if (o.type != EntityType::TERRAIN || !o.visible || !o.solid || !terrain_ground(o, pos.x, pos.z, gy)) {
+						continue;
+					}
+					const float bottom = pos.y - half;
+					if (bottom < gy + 0.02f && bottom > gy - 2.5f && velocity_y <= 0.5f) {
+						pos.y = gy + half;
+						velocity_y = std::max(velocity_y, 0.0f);
+						on_ground = true;
+						ground = -1;
+					}
 				}
 			}
 			if (bounce > 0.0f) {

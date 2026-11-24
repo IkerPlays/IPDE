@@ -25,6 +25,7 @@ enum class EntityType {
 	CAPSULE,
 	MODEL, // Wavefront OBJ file inside the project.
 	LIGHT, // Point light.
+	TERRAIN, // Hilly ground generated from a seed.
 };
 
 bool entity_type_is_3d(EntityType p_type);
@@ -55,6 +56,7 @@ struct Entity {
 	std::string texture; // Optional PNG, relative to the project. In 2D, rectangles become sprites.
 	bool flip_x = false; // 2D sprite mirrored horizontally (players face where they walk).
 	float uv_scale = 1.0f;
+	int seed = 1; // Terrain shape.
 	int pattern = 0; // 3D procedural pattern (Material3D::Pattern).
 	float pattern_scale = 1.0f;
 	// Lights.

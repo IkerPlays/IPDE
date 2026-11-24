@@ -4,7 +4,9 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <cmath>
 #include <map>
+#include <mutex>
 #include <sstream>
 
 namespace ipde {
@@ -122,6 +124,99 @@ std::shared_ptr<Mesh> sphere(int p_rings, int p_segments) {
 	}
 	m->fix_winding();
 	m->compute_bounds();
+	return m;
+}
+
+/* Terrain */
+
+static float hash_noise(int p_x, int p_y, int p_seed) {
+	uint32_t h = (uint32_t)p_x * 374761393u + (uint32_t)p_y * 668265263u + (uint32_t)p_seed * 2246822519u;
+	h = (h ^ (h >> 13)) * 1274126177u;
+	return ((h ^ (h >> 16)) & 0xFFFF) / 65535.0f;
+}
+
+static float smooth_noise(float p_x, float p_y, int p_seed) {
+	const int ix = (int)std::floor(p_x), iy = (int)std::floor(p_y);
+	float tx = p_x - ix, ty = p_y - iy;
+	tx = tx * tx * (3 - 2 * tx);
+	ty = ty * ty * (3 - 2 * ty);
+	const float a = hash_noise(ix, iy, p_seed), b = hash_noise(ix + 1, iy, p_seed);
+	const float c = hash_noise(ix, iy + 1, p_seed), d = hash_noise(ix + 1, iy + 1, p_seed);
+	return (a + (b - a) * tx) * (1 - ty) + (c + (d - c) * tx) * ty;
+}
+
+// Normalized (0..1) heights of the terrain grid, cached by seed.
+static const std::vector<float> &terrain_grid(int p_seed) {
+	static std::map<int, std::vector<float>> cache;
+	static std::mutex lock;
+	std::lock_guard<std::mutex> guard(lock);
+	auto it = cache.find(p_seed);
+	if (it != cache.end()) {
+		return it->second;
+	}
+	const int n = TERRAIN_RES + 1;
+	std::vector<float> h((size_t)n * n);
+	float lo = 1e9f, hi = -1e9f;
+	for (int j = 0; j < n; j++) {
+		for (int i = 0; i < n; i++) {
+			const float u = (float)i / TERRAIN_RES * 3.0f, v = (float)j / TERRAIN_RES * 3.0f;
+			// A few octaves of smooth noise: big hills plus smaller bumps.
+			float value = smooth_noise(u, v, p_seed) * 0.6f + smooth_noise(u * 2.1f, v * 2.1f, p_seed + 17) * 0.28f + smooth_noise(u * 4.3f, v * 4.3f, p_seed + 31) * 0.12f;
+			h[(size_t)j * n + i] = value;
+			lo = std::min(lo, value);
+			hi = std::max(hi, value);
+		}
+	}
+	const float range = std::max(1e-4f, hi - lo);
+	for (float &v : h) {
+		v = (v - lo) / range;
+	}
+	return cache.emplace(p_seed, std::move(h)).first->second;
+}
+
+float terrain_height(int p_seed, float p_u, float p_v) {
+	const std::vector<float> &h = terrain_grid(p_seed);
+	const int n = TERRAIN_RES + 1;
+	const float x = std::clamp(p_u, 0.0f, 1.0f) * TERRAIN_RES, y = std::clamp(p_v, 0.0f, 1.0f) * TERRAIN_RES;
+	const int ix = std::min((int)x, TERRAIN_RES - 1), iy = std::min((int)y, TERRAIN_RES - 1);
+	const float fx = x - ix, fy = y - iy;
+	const float a = h[(size_t)iy * n + ix], b = h[(size_t)iy * n + ix + 1];
+	const float c = h[(size_t)(iy + 1) * n + ix], d = h[(size_t)(iy + 1) * n + ix + 1];
+	// Same split as the mesh triangles (a-c-d and a-d-b).
+	if (fy >= fx) {
+		return a + (d - c) * fx + (c - a) * fy;
+	}
+	return a + (b - a) * fx + (d - b) * fy;
+}
+
+std::shared_ptr<Mesh> terrain(int p_seed) {
+	static std::map<int, std::shared_ptr<Mesh>> cache;
+	auto it = cache.find(p_seed);
+	if (it != cache.end()) {
+		return it->second;
+	}
+	const std::vector<float> &h = terrain_grid(p_seed);
+	const int n = TERRAIN_RES + 1;
+	auto m = std::make_shared<Mesh>();
+	auto height_at = [&](int i, int j) { return h[(size_t)std::clamp(j, 0, n - 1) * n + std::clamp(i, 0, n - 1)]; };
+	for (int j = 0; j < n; j++) {
+		for (int i = 0; i < n; i++) {
+			const float u = (float)i / TERRAIN_RES, v = (float)j / TERRAIN_RES;
+			// Normal from the height differences (in unit-box space).
+			const float dx = (height_at(i + 1, j) - height_at(i - 1, j)) * TERRAIN_RES * 0.5f;
+			const float dz = (height_at(i, j + 1) - height_at(i, j - 1)) * TERRAIN_RES * 0.5f;
+			add_vertex(*m, Vec3(u - 0.5f, h[(size_t)j * n + i] - 0.5f, v - 0.5f), Vec3(-dx, 1.0f, -dz).normalized(), u * 8.0f, v * 8.0f);
+		}
+	}
+	for (int j = 0; j < TERRAIN_RES; j++) {
+		for (int i = 0; i < TERRAIN_RES; i++) {
+			const uint32_t a = (uint32_t)(j * n + i), b = a + 1, c = a + n, d = c + 1;
+			m->indices.insert(m->indices.end(), { a, c, d, a, d, b });
+		}
+	}
+	m->fix_winding();
+	m->compute_bounds();
+	cache[p_seed] = m;
 	return m;
 }
 

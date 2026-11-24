@@ -90,6 +90,9 @@ std::shared_ptr<Mesh> SceneRenderer3D::get_mesh(const Entity &p_e, const std::st
 		fallback.type = EntityType::CUBE;
 		return get_mesh(fallback, p_project_dir);
 	}
+	if (p_e.type == EntityType::TERRAIN) {
+		return meshes::terrain(p_e.seed); // Cached by seed.
+	}
 	auto it = primitives.find(p_e.type);
 	if (it != primitives.end()) {
 		return it->second;

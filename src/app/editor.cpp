@@ -356,6 +356,16 @@ static void add_entity(EntityType p_type) {
 			case EntityType::MODEL:
 				e.color = 0xFFDDDDDD;
 				break;
+			case EntityType::TERRAIN:
+				e.width = e.depth = 40.0f;
+				e.height = 6.0f;
+				e.y = 2.5f; // The lowest point is half a meter below the ground level.
+				e.color = 0xFF5FA855;
+				e.roughness = 0.95f;
+				e.pattern = 5; // Noise.
+				e.pattern_scale = 2.0f;
+				e.seed = 1 + (int)(platform::get_time() * 1000.0) % 9999;
+				break;
 			default:
 				break;
 		}
@@ -698,7 +708,7 @@ static void draw_scene_panel(App &p_app, float p_width) {
 	}
 	if (ImGui::BeginPopup("AddMenu")) {
 		if (g_ed.scene.is_3d) {
-			const EntityType types[] = { EntityType::CUBE, EntityType::SPHERE, EntityType::PLANE, EntityType::CYLINDER, EntityType::CONE, EntityType::TORUS, EntityType::CAPSULE, EntityType::MODEL, EntityType::LIGHT };
+			const EntityType types[] = { EntityType::CUBE, EntityType::SPHERE, EntityType::PLANE, EntityType::CYLINDER, EntityType::CONE, EntityType::TORUS, EntityType::CAPSULE, EntityType::TERRAIN, EntityType::MODEL, EntityType::LIGHT };
 			for (EntityType t : types) {
 				if (t == EntityType::MODEL || t == EntityType::LIGHT) {
 					ImGui::Separator();
@@ -1452,6 +1462,16 @@ static void draw_inspector(App &p_app) {
 		}
 		if (!e.texture.empty()) {
 			drag_float("Escala UV", &e.uv_scale, 0.02f, 0.01f, 100, "%.2f");
+		}
+		if (e.type == EntityType::TERRAIN) {
+			if (ImGui::InputInt("Forma (semilla)", &e.seed)) {
+				g_ed.dirty = true;
+			}
+			if (ImGui::Button("Otra forma al azar")) {
+				e.seed = 1 + (int)(platform::get_time() * 1000.0) % 99999;
+				g_ed.dirty = true;
+			}
+			ui::dim_text("El tamaño Y es la altura de las colinas. El jugador puede caminar por encima.");
 		}
 		if (e.type == EntityType::MODEL) {
 			text_field("Modelo (.obj)", e.model);

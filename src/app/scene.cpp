@@ -28,6 +28,7 @@ static const TypeInfo TYPES[] = {
 	{ EntityType::CAPSULE, "capsule", "Cápsula" },
 	{ EntityType::MODEL, "model", "Modelo" },
 	{ EntityType::LIGHT, "light", "Luz" },
+	{ EntityType::TERRAIN, "terrain", "Terreno" },
 };
 
 const char *entity_type_name(EntityType p_type) {
@@ -145,6 +146,9 @@ Json Scene::to_json() const {
 			je["flip_x"] = true;
 		}
 		je["uv_scale"] = (double)e.uv_scale;
+		if (e.type == EntityType::TERRAIN) {
+			je["seed"] = e.seed;
+		}
 		if (e.pattern != 0) {
 			je["pattern"] = e.pattern;
 			je["pattern_scale"] = (double)e.pattern_scale;
@@ -258,6 +262,7 @@ Scene Scene::from_json(const Json &p_json) {
 		en.texture = je["texture"].as_string();
 		en.flip_x = je["flip_x"].as_bool(false);
 		en.uv_scale = (float)je["uv_scale"].as_number(1.0);
+		en.seed = (int)je["seed"].as_number(1);
 		en.pattern = std::clamp((int)je["pattern"].as_number(0), 0, 5);
 		en.pattern_scale = (float)je["pattern_scale"].as_number(1.0);
 		en.light_energy = (float)je["light_energy"].as_number(en.light_energy);

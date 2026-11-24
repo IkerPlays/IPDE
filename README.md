@@ -7,7 +7,7 @@
 - **Plataforma:** Windows (x86_64). Un único `IPDE.exe`, sin instalador ni dependencias.
 - **Renderizador propio por software:** funciona en cualquier PC, sin depender de drivers de GPU.
 - **Panel de proyectos:** crear, importar y abrir proyectos.
-- **Motor 3D propio:** rasterizador por software multihilo con buffer de profundidad, luz de sol con sombras, luces puntuales, materiales (rugosidad, metal, emisión, texturas PNG), niebla, cielo y tonemapping. Primitivas (cubo, esfera, plano, cilindro, cono, toro, cápsula) y modelos `.obj`.
+- **Motor 3D propio:** rasterizador por software multihilo con buffer de profundidad, luz de sol con sombras, luces puntuales, materiales (rugosidad, metal, emisión, texturas PNG), niebla, cielo y tonemapping. Primitivas (cubo, esfera, plano, cilindro, cono, toro, cápsula), terreno con colinas y modelos `.obj`.
 - **Editor 3D:** cámara orbital, selección con clic, mover objetos arrastrando, panel de entorno (cielo, sol, sombras, niebla).
 - **Juego 3D:** jugador en tercera persona (WASD, salto, colisiones), monedas coleccionables y HUD.
 - **Audio:** efectos de sonido integrados (monedas, salto, trampolín, caídas, meta), sonidos WAV propios y música en bucle.
