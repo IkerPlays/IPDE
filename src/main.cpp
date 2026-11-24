@@ -122,7 +122,13 @@ int main(int argc, char **argv) {
 	// "--run <project folder>": play a project (used by the editor's Run button).
 	for (size_t i = 0; i + 1 < args.size(); i++) {
 		if (args[i] == "--run") {
-			return run_game(args[i + 1]);
+			std::string level;
+			for (size_t k = 0; k + 1 < args.size(); k++) {
+				if (args[k] == "--level") {
+					level = args[k + 1];
+				}
+			}
+			return run_game(args[i + 1], level);
 		}
 	}
 	// Exported game: the project data lives in a "data" folder next to the executable.

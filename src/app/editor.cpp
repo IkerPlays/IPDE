@@ -19,6 +19,7 @@ namespace ipde {
 
 struct EditorState {
 	Scene scene;
+	std::string scene_file; // Level being edited (file name inside the project).
 	int selected = -1;
 	bool dirty = false;
 	// 2D view.
@@ -63,14 +64,30 @@ bool editor_has_unsaved_changes() {
 	return g_ed.dirty;
 }
 
-void editor_open(App &p_app) {
+// Loads one level into the editor (resets the selection and the undo history).
+static void load_level(App &p_app, const std::string &p_file) {
+	const EditorState old = g_ed;
 	g_ed = EditorState();
-	if (!Scene::load(p_app.project.get_scene_file(), g_ed.scene)) {
+	// Keep the view and options when switching levels.
+	g_ed.yaw = old.yaw;
+	g_ed.pitch = old.pitch;
+	g_ed.distance = old.distance;
+	g_ed.target = old.target;
+	g_ed.zoom = old.zoom;
+	g_ed.pan = old.pan;
+	g_ed.show_grid = old.show_grid;
+	g_ed.scene_file = p_file;
+	if (!Scene::load(p_app.project.get_scene_path(p_file), g_ed.scene)) {
 		g_ed.scene = Scene(); // New empty scene.
 	}
+	g_ed.committed = g_ed.scene.to_json().dump(false);
+}
+
+void editor_open(App &p_app) {
+	g_ed = EditorState();
 	meshes::clear_cache();
 	g_scene_r3d = SceneRenderer3D();
-	g_ed.committed = g_ed.scene.to_json().dump(false);
+	load_level(p_app, p_app.project.scenes.empty() ? std::string("main.scene") : p_app.project.scenes[0]);
 }
 
 // Records a history step when the scene changed and no edit is in progress (mouse released, no widget active).
@@ -164,7 +181,7 @@ static bool color_edit(const char *p_label, uint32_t *p_argb, bool p_alpha = fal
 }
 
 static bool save(App &p_app) {
-	if (g_ed.scene.save(p_app.project.get_scene_file())) {
+	if (g_ed.scene.save(p_app.project.get_scene_path(g_ed.scene_file))) {
 		g_ed.dirty = false;
 		p_app.toast("Escena guardada.");
 		return true;
@@ -175,7 +192,7 @@ static bool save(App &p_app) {
 
 static void run_project(App &p_app) {
 	save(p_app);
-	if (!platform::create_process(platform::get_executable_path(), { "--run", p_app.project.path })) {
+	if (!platform::create_process(platform::get_executable_path(), { "--run", p_app.project.path, "--level", g_ed.scene_file })) {
 		p_app.toast("No se pudo ejecutar el proyecto.", true);
 	}
 }
@@ -199,16 +216,23 @@ static void export_windows(App &p_app) {
 #endif
 	ok = ok && fs::copy_file(platform::get_executable_path(), fs::join(out_dir, exe_name));
 	ok = ok && fs::copy_file(p_app.project.get_file(), fs::join(data_dir, "project.ipde"));
-	ok = ok && fs::copy_file(p_app.project.get_scene_file(), fs::join(data_dir, "main.scene"));
-	// Files used by the scene (textures, models, sounds, music), keeping their relative paths.
+	// Every level and the files they use (textures, models, sounds, music), keeping their relative paths.
 	std::vector<std::string> files;
-	if (!g_ed.scene.music.empty()) {
-		files.push_back(g_ed.scene.music);
-	}
-	for (const Entity &e : g_ed.scene.entities) {
-		for (const std::string *f : { &e.texture, &e.model, &e.sound }) {
-			if (!f->empty()) {
-				files.push_back(*f);
+	for (const std::string &level : p_app.project.scenes) {
+		Scene sc;
+		if (!Scene::load(p_app.project.get_scene_path(level), sc)) {
+			ok = false;
+			continue;
+		}
+		files.push_back(level);
+		if (!sc.music.empty()) {
+			files.push_back(sc.music);
+		}
+		for (const Entity &e : sc.entities) {
+			for (const std::string *f : { &e.texture, &e.model, &e.sound }) {
+				if (!f->empty()) {
+					files.push_back(*f);
+				}
 			}
 		}
 	}
@@ -368,9 +392,88 @@ static void focus_selected() {
 	}
 }
 
+static std::string level_label(const Project &p_project, size_t p_index) {
+	std::string f = p_project.scenes[p_index];
+	if (f.size() > 6 && f.compare(f.size() - 6, 6, ".scene") == 0) {
+		f.resize(f.size() - 6);
+	}
+	return std::to_string(p_index + 1) + ". " + f;
+}
+
+// Level selector: switch, add, reorder and delete levels.
+static void draw_levels(App &p_app) {
+	const float s = p_app.scale();
+	Project &project = p_app.project;
+	ImGui::TextUnformatted("NIVELES");
+	ImGui::Separator();
+	size_t current = 0;
+	for (size_t i = 0; i < project.scenes.size(); i++) {
+		if (project.scenes[i] == g_ed.scene_file) {
+			current = i;
+		}
+	}
+	ImGui::SetNextItemWidth(-76 * s);
+	if (ImGui::BeginCombo("##level", level_label(project, current).c_str())) {
+		for (size_t i = 0; i < project.scenes.size(); i++) {
+			if (ImGui::Selectable(level_label(project, i).c_str(), i == current) && i != current) {
+				if (g_ed.dirty) {
+					save(p_app); // Switching levels keeps the changes.
+				}
+				load_level(p_app, project.scenes[i]);
+			}
+		}
+		ImGui::EndCombo();
+	}
+	if (ImGui::IsItemHovered()) {
+		ImGui::SetTooltip("Los niveles se juegan en este orden: al tocar la Meta se pasa al siguiente.");
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("+", ImVec2(30 * s, 0))) {
+		if (g_ed.dirty) {
+			save(p_app);
+		}
+		std::string file;
+		if (project.add_scene(g_ed.scene.is_3d, file)) {
+			load_level(p_app, file);
+			p_app.toast("Nivel creado: " + file);
+		} else {
+			p_app.toast("No se pudo crear el nivel.", true);
+		}
+	}
+	if (ImGui::IsItemHovered()) {
+		ImGui::SetTooltip("Nuevo nivel");
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("...", ImVec2(-1, 0))) {
+		ImGui::OpenPopup("LevelMenu");
+	}
+	if (ImGui::BeginPopup("LevelMenu")) {
+		if (ImGui::MenuItem("Mover antes", nullptr, false, current > 0)) {
+			std::swap(project.scenes[current], project.scenes[current - 1]);
+			project.save();
+		}
+		if (ImGui::MenuItem("Mover después", nullptr, false, current + 1 < project.scenes.size())) {
+			std::swap(project.scenes[current], project.scenes[current + 1]);
+			project.save();
+		}
+		ImGui::Separator();
+		if (ImGui::MenuItem("Quitar nivel del juego", nullptr, false, project.scenes.size() > 1)) {
+			// The file stays in the project folder (nothing is deleted from disk).
+			project.scenes.erase(project.scenes.begin() + (long)current);
+			project.save();
+			g_ed.dirty = false;
+			load_level(p_app, project.scenes[std::min(current, project.scenes.size() - 1)]);
+			p_app.toast("Nivel quitado (el archivo sigue en la carpeta del proyecto).");
+		}
+		ImGui::EndPopup();
+	}
+	ImGui::Spacing();
+}
+
 static void draw_scene_panel(App &p_app, float p_width) {
 	const float s = p_app.scale();
 	ImGui::BeginChild("ScenePanel", ImVec2(p_width, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
+	draw_levels(p_app);
 	ImGui::TextUnformatted(g_ed.scene.is_3d ? "ESCENA 3D" : "ESCENA 2D");
 	ImGui::Separator();
 	if (ui::accent_button("+  Añadir", ImVec2(-1, 0))) {

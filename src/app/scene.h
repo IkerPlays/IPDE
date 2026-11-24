@@ -122,9 +122,16 @@ struct Project {
 	std::string name;
 	std::string path; // Project folder.
 	std::string engine_version;
+	// Scene files (levels) in play order; the first one is where the game starts.
+	std::vector<std::string> scenes = { "main.scene" };
 
 	std::string get_file() const;
-	std::string get_scene_file() const;
+	std::string get_scene_file() const; // First scene.
+	std::string get_scene_path(const std::string &p_file) const;
+	// A free file name for a new level ("nivel 2.scene", ...).
+	std::string make_scene_file_name() const;
+	// Creates a small starter scene (ground and player) and adds it to the list.
+	bool add_scene(bool p_3d, std::string &r_file);
 	bool save() const;
 	static bool load(const std::string &p_folder, Project &r_project);
 	// Creates the folder, the project file and an example scene (2D or 3D).

@@ -3,6 +3,7 @@
 #include "core/fs.h"
 #include "version.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 
@@ -275,7 +276,20 @@ std::string Project::get_file() const {
 }
 
 std::string Project::get_scene_file() const {
-	return fs::join(path, "main.scene");
+	return get_scene_path(scenes.empty() ? std::string("main.scene") : scenes[0]);
+}
+
+std::string Project::get_scene_path(const std::string &p_file) const {
+	return fs::join(path, p_file);
+}
+
+std::string Project::make_scene_file_name() const {
+	for (int i = (int)scenes.size() + 1;; i++) {
+		const std::string name = "nivel " + std::to_string(i) + ".scene";
+		if (std::find(scenes.begin(), scenes.end(), name) == scenes.end() && !fs::exists(get_scene_path(name))) {
+			return name;
+		}
+	}
 }
 
 bool Project::save() const {
@@ -283,7 +297,12 @@ bool Project::save() const {
 	j["format"] = 1;
 	j["name"] = name;
 	j["engine_version"] = engine_version.empty() ? std::string(IPDE_VERSION_NUMBER) : engine_version;
-	j["main_scene"] = "main.scene";
+	j["main_scene"] = scenes.empty() ? std::string("main.scene") : scenes[0];
+	Json list = Json::array();
+	for (const std::string &sc : scenes) {
+		list.push_back(sc);
+	}
+	j["scenes"] = list;
 	return fs::write_file(get_file(), j.dump(true));
 }
 
@@ -299,6 +318,17 @@ bool Project::load(const std::string &p_folder, Project &r_project) {
 	r_project.path = p_folder;
 	r_project.name = j["name"].as_string(fs::get_file_name(p_folder));
 	r_project.engine_version = j["engine_version"].as_string();
+	r_project.scenes.clear();
+	for (const Json &sc : j["scenes"].get_items()) {
+		const std::string f = sc.as_string();
+		// Only plain file names inside the project folder.
+		if (!f.empty() && f.find("..") == std::string::npos && std::find(r_project.scenes.begin(), r_project.scenes.end(), f) == r_project.scenes.end()) {
+			r_project.scenes.push_back(f);
+		}
+	}
+	if (r_project.scenes.empty()) {
+		r_project.scenes.push_back(j["main_scene"].as_string("main.scene"));
+	}
 	return true;
 }
 
@@ -489,6 +519,60 @@ static Scene example_scene_3d() {
 	light.solid = false;
 	s.entities.push_back(light);
 	return s;
+}
+
+bool Project::add_scene(bool p_3d, std::string &r_file) {
+	Scene s;
+	s.is_3d = p_3d;
+	r_file = make_scene_file_name();
+	s.name = r_file.substr(0, r_file.size() - 6);
+	if (p_3d) {
+		Entity ground = make3d("Suelo", EntityType::CUBE, 0, -0.25f, 0, 24, 0.5f, 24, 0xFF4B5578);
+		ground.roughness = 0.9f;
+		s.entities.push_back(ground);
+		Entity player = make3d("Jugador", EntityType::CAPSULE, 0, 1, 4, 1, 2, 1, 0xFF6C7BFF);
+		player.player = true;
+		player.camera_follow = true;
+		player.player_speed = 5.0f;
+		s.entities.push_back(player);
+		Entity goal = make3d("Meta", EntityType::CYLINDER, 0, 1.0f, -8, 0.9f, 2.0f, 0.9f, 0xFF3DDC84);
+		goal.emission = 0.8f;
+		goal.goal = true;
+		goal.solid = false;
+		s.entities.push_back(goal);
+	} else {
+		Entity ground;
+		ground.name = "Suelo";
+		ground.y = 220;
+		ground.width = 900;
+		ground.height = 40;
+		ground.color = 0xFF3A3F66;
+		s.entities.push_back(ground);
+		Entity player;
+		player.name = "Jugador";
+		player.x = -300;
+		player.y = 150;
+		player.width = 64;
+		player.height = 64;
+		player.color = 0xFF6C7BFF;
+		player.player = true;
+		s.entities.push_back(player);
+		Entity goal;
+		goal.name = "Meta";
+		goal.x = 380;
+		goal.y = 160;
+		goal.width = 50;
+		goal.height = 80;
+		goal.color = 0xFF3DDC84;
+		goal.goal = true;
+		goal.solid = false;
+		s.entities.push_back(goal);
+	}
+	if (!s.save(get_scene_path(r_file))) {
+		return false;
+	}
+	scenes.push_back(r_file);
+	return save();
 }
 
 bool Project::create(const std::string &p_folder, const std::string &p_name, bool p_3d, std::string &r_error) {

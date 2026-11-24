@@ -133,7 +133,7 @@ static void draw_banner(ImFont *p_font, const char *p_msg, const char *p_sub, in
 	}
 }
 
-static void draw_status(ImFont *p_font, const GameStatus &p_st, double p_now, int p_w, int p_h) {
+static void draw_status(ImFont *p_font, const GameStatus &p_st, double p_now, int p_w, int p_h, bool p_has_next) {
 	ImDrawList *fg = ImGui::GetForegroundDrawList();
 	if (p_st.deaths > 0) {
 		char buf[48];
@@ -145,9 +145,13 @@ static void draw_status(ImFont *p_font, const GameStatus &p_st, double p_now, in
 		fg->AddRectFilled(ImVec2(0, 0), ImVec2((float)p_w, (float)p_h), IM_COL32(255, 40, 60, a));
 	}
 	if (p_st.goal_time > 0) {
-		char sub[96];
-		snprintf(sub, sizeof(sub), "Tiempo: %.1f s   ·   Caídas: %d   ·   Esc para salir", p_st.level_time, p_st.deaths);
-		draw_banner(p_font, "¡Nivel completado!", sub, p_w, (float)p_h * 0.38f, IM_COL32(61, 220, 132, 255));
+		char sub[128];
+		if (p_has_next) {
+			snprintf(sub, sizeof(sub), "Tiempo: %.1f s   ·   Caídas: %d   ·   Siguiente nivel...", p_st.level_time, p_st.deaths);
+		} else {
+			snprintf(sub, sizeof(sub), "Tiempo: %.1f s   ·   Caídas: %d   ·   Esc para salir", p_st.level_time, p_st.deaths);
+		}
+		draw_banner(p_font, p_has_next ? "¡Nivel completado!" : "¡Juego completado!", sub, p_w, (float)p_h * 0.38f, IM_COL32(61, 220, 132, 255));
 	}
 }
 
@@ -221,6 +225,26 @@ struct Game3D {
 	int ground = -1; // Entity the player stands on.
 	double prev_time = 0;
 	std::vector<Vec3> start_positions; // For enemies (reset when the player dies).
+
+	// Clears the gameplay state for a new level (keeps the renderer and its caches).
+	void reset() {
+		player = -1;
+		follow = -1;
+		spawn = Vec3();
+		velocity_y = 0.0f;
+		on_ground = false;
+		cam_yaw = 0.0f;
+		cam_pitch = 22.0f;
+		cam_distance = 7.0f;
+		cam_initialized = false;
+		score = 0;
+		total = 0;
+		all_collected_time = 0;
+		status = GameStatus();
+		ground = -1;
+		prev_time = 0;
+		start_positions.clear();
+	}
 
 	void die(double now) {
 		Entity &p = scene.entities[player];
@@ -497,7 +521,7 @@ static void upscale(const uint32_t *p_src, int p_sw, int p_sh, std::vector<uint3
 	}
 }
 
-int run_game(const std::string &p_project_dir) {
+int run_game(const std::string &p_project_dir, const std::string &p_start_level) {
 	Project project;
 	Scene scene;
 	if (!Project::load(p_project_dir, project) || !Scene::load(project.get_scene_file(), scene)) {
@@ -517,32 +541,64 @@ int run_game(const std::string &p_project_dir) {
 
 	audio::init();
 	g_audio.project_dir = project.path;
-	g_audio.effects = scene.sound_effects;
-	if (!scene.music.empty()) {
-		audio::play(g_audio.load(scene.music), scene.music_volume, 1.0f, true);
-	}
 
 	SoftRenderer renderer;
-	const double start = platform::get_time();
+	double start = platform::get_time();
 	double last = start;
 
 	Game3D game3d;
-	if (scene.is_3d) {
-		game3d.scene = scene;
-		game3d.project_dir = project.path;
-		game3d.init();
-	}
+	game3d.project_dir = project.path;
 	// 2D state.
 	std::vector<Entity> &ents = scene.entities;
 	int score2d = 0;
 	int total2d = 0;
 	double all2d_time = 0;
 	GameStatus status2d;
-	const std::vector<Entity> initial2d = ents;
-	for (const Entity &e : ents) {
-		if (e.collectible && e.visible) {
-			total2d++;
+	std::vector<Entity> initial2d;
+
+	// Levels: the project's scenes are played in order.
+	size_t level = 0;
+	std::string current_music;
+	auto start_level = [&](size_t p_index, Scene &&p_scene) {
+		scene = std::move(p_scene);
+		level = p_index;
+		start = platform::get_time();
+		last = start;
+		g_audio.effects = scene.sound_effects;
+		if (scene.music != current_music) {
+			audio::stop_all();
+			current_music = scene.music;
+			if (!scene.music.empty()) {
+				audio::play(g_audio.load(scene.music), scene.music_volume, 1.0f, true);
+			}
 		}
+		game3d.reset();
+		if (scene.is_3d) {
+			game3d.scene = scene;
+			game3d.init();
+		}
+		score2d = 0;
+		total2d = 0;
+		all2d_time = 0;
+		status2d = GameStatus();
+		initial2d = ents;
+		for (const Entity &e : ents) {
+			if (e.collectible && e.visible) {
+				total2d++;
+			}
+		}
+	};
+	auto next_level_index = [&]() -> size_t { return level + 1; };
+	{
+		size_t first_index = 0;
+		Scene first = scene; // start_level moves into "scene", so pass a copy.
+		for (size_t i = 0; i < project.scenes.size(); i++) {
+			if (!p_start_level.empty() && project.scenes[i] == p_start_level && Scene::load(project.get_scene_path(project.scenes[i]), first)) {
+				first_index = i;
+				break;
+			}
+		}
+		start_level(first_index, std::move(first));
 	}
 
 	// Dynamic resolution (3D): lowers the internal resolution when frames take too long.
@@ -570,6 +626,22 @@ int run_game(const std::string &p_project_dir) {
 			break;
 		}
 		const double t = now - start;
+		// Go to the next level a moment after reaching the goal.
+		{
+			const GameStatus &st = scene.is_3d ? game3d.status : status2d;
+			if (st.goal_time > 0 && t - st.goal_time > 2.5 && next_level_index() < project.scenes.size()) {
+				Scene next;
+				size_t index = next_level_index();
+				while (index < project.scenes.size() && !Scene::load(project.get_scene_path(project.scenes[index]), next)) {
+					index++;
+				}
+				if (index < project.scenes.size()) {
+					start_level(index, std::move(next));
+					ImGui::EndFrame();
+					continue;
+				}
+			}
+		}
 
 		if (ImGui::IsKeyPressed(ImGuiKey_F3, false)) {
 			show_stats = !show_stats;
@@ -577,7 +649,7 @@ int run_game(const std::string &p_project_dir) {
 		if (scene.is_3d) {
 			game3d.update(dt, t);
 			draw_hud(font, game3d.score, game3d.total, game3d.all_collected_time, t, w);
-			draw_status(font, game3d.status, t, w, h);
+			draw_status(font, game3d.status, t, w, h, level + 1 < project.scenes.size());
 			if (show_stats) {
 				char stats[128];
 				snprintf(stats, sizeof(stats), "%.0f FPS  ·  %.1f ms  ·  %d%%  ·  %zu tri", 1.0 / std::max(1e-6, frame_avg), frame_avg * 1000.0, (int)std::lround(render_scale * 100), game3d.renderer.get_triangle_count());
@@ -721,7 +793,7 @@ int run_game(const std::string &p_project_dir) {
 			}
 			draw_scene(ImGui::GetBackgroundDrawList(), scene, origin, 1.0f, font, t, true);
 			draw_hud(font, score2d, total2d, all2d_time, t, w);
-			draw_status(font, status2d, t, w, h);
+			draw_status(font, status2d, t, w, h, level + 1 < project.scenes.size());
 			ImGui::Render();
 			renderer.resize(w, h);
 			renderer.clear(scene.background);
