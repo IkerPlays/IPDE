@@ -65,7 +65,6 @@ static ImGuiKey vk_to_imgui_key(WPARAM p_vk) {
 		case VK_SHIFT: return ImGuiKey_LeftShift;
 		case VK_CONTROL: return ImGuiKey_LeftCtrl;
 		case VK_MENU: return ImGuiKey_LeftAlt;
-		case VK_F2: return ImGuiKey_F2;
 		case VK_F1: return ImGuiKey_F1;
 		case VK_F2: return ImGuiKey_F2;
 		case VK_F3: return ImGuiKey_F3;
@@ -78,7 +77,6 @@ static ImGuiKey vk_to_imgui_key(WPARAM p_vk) {
 		case VK_F10: return ImGuiKey_F10;
 		case VK_F11: return ImGuiKey_F11;
 		case VK_F12: return ImGuiKey_F12;
-		case VK_F6: return ImGuiKey_F6;
 		default: break;
 	}
 	if (p_vk >= '0' && p_vk <= '9') {
