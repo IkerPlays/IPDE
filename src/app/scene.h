@@ -55,6 +55,8 @@ struct Entity {
 	std::string texture; // Optional PNG, relative to the project. In 2D, rectangles become sprites.
 	bool flip_x = false; // 2D sprite mirrored horizontally (players face where they walk).
 	float uv_scale = 1.0f;
+	int pattern = 0; // 3D procedural pattern (Material3D::Pattern).
+	float pattern_scale = 1.0f;
 	// Lights.
 	float light_energy = 2.0f;
 	float light_range = 8.0f;

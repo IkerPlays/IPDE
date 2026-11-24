@@ -97,6 +97,7 @@ void Renderer3D::begin(const Camera3D &p_camera, const Environment3D &p_env, con
 
 void Renderer3D::draw_mesh(const Mesh &p_mesh, const Mat4 &p_model, const Material3D &p_material, uint32_t p_object_id) {
 	materials.push_back(std::make_unique<Material3D>(p_material));
+	materials.back()->pattern_origin = p_model.transform_point(Vec3(0, 0, 0));
 	const Material3D *mat = materials.back().get();
 	if (p_material.cast_shadows && !p_material.unshaded) {
 		shadow_casters.push_back({ &p_mesh, p_model });
@@ -360,10 +361,80 @@ float Renderer3D::_shadow_factor(const Vec3 &p_world, const Vec3 &p_normal) cons
 	return a * (1 - fy) + b * fy;
 }
 
+static float hash2(int p_x, int p_y) {
+	uint32_t h = (uint32_t)p_x * 374761393u + (uint32_t)p_y * 668265263u;
+	h = (h ^ (h >> 13)) * 1274126177u;
+	return ((h ^ (h >> 16)) & 0xFFFF) / 65535.0f;
+}
+
+static float value_noise(float p_x, float p_y) {
+	const float fx = std::floor(p_x), fy = std::floor(p_y);
+	const int ix = (int)fx, iy = (int)fy;
+	float tx = p_x - fx, ty = p_y - fy;
+	tx = tx * tx * (3 - 2 * tx);
+	ty = ty * ty * (3 - 2 * ty);
+	const float a = hash2(ix, iy), b = hash2(ix + 1, iy), c = hash2(ix, iy + 1), d = hash2(ix + 1, iy + 1);
+	return (a + (b - a) * tx) + ((c + (d - c) * tx) - (a + (b - a) * tx)) * ty;
+}
+
+// Brightness factor of a procedural pattern at a point (planar projection on the dominant axis).
+static float pattern_factor(const Material3D &p_mat, const Vec3 &p_world, const Vec3 &p_normal) {
+	const Vec3 p = (p_world - p_mat.pattern_origin) * (1.0f / std::max(0.01f, p_mat.pattern_scale));
+	const float ax = std::fabs(p_normal.x), ay = std::fabs(p_normal.y), az = std::fabs(p_normal.z);
+	float u, v;
+	if (ay >= ax && ay >= az) {
+		u = p.x;
+		v = p.z;
+	} else if (ax >= az) {
+		u = p.z;
+		v = p.y;
+	} else {
+		u = p.x;
+		v = p.y;
+	}
+	// Small offset so faces exactly on tile borders don't flicker.
+	u += 0.0013f;
+	v += 0.0017f;
+	switch (p_mat.pattern) {
+		case Material3D::PATTERN_CHECKER:
+			return (((int)std::floor(u) + (int)std::floor(v)) & 1) ? 1.0f : 0.72f;
+		case Material3D::PATTERN_BRICKS: {
+			const float row = std::floor(v * 2.0f);
+			const float bu = u + (((int)row & 1) ? 0.5f : 0.0f);
+			const float fu = bu - std::floor(bu), fv = v * 2.0f - row;
+			if (fu < 0.04f || fv < 0.08f) {
+				return 0.55f; // Mortar.
+			}
+			return 0.82f + 0.18f * hash2((int)std::floor(bu), (int)row);
+		}
+		case Material3D::PATTERN_STRIPES:
+			return ((int)std::floor(u * 2.0f) & 1) ? 1.0f : 0.75f;
+		case Material3D::PATTERN_TILES: {
+			const float fu = u - std::floor(u), fv = v - std::floor(v);
+			if (fu < 0.03f || fv < 0.03f || fu > 0.97f || fv > 0.97f) {
+				return 0.6f;
+			}
+			return 0.93f + 0.07f * hash2((int)std::floor(u), (int)std::floor(v));
+		}
+		case Material3D::PATTERN_NOISE:
+			return 0.7f + 0.3f * (value_noise(u * 2.0f, v * 2.0f) * 0.65f + value_noise(u * 6.0f, v * 6.0f) * 0.35f);
+		default:
+			return 1.0f;
+	}
+}
+
 Vec3 Renderer3D::_shade(const Material3D &p_mat, const Vec3 &p_world, Vec3 p_normal, const Vec2 &p_uv, bool p_front) const {
 	Vec3 albedo = p_mat.albedo;
 	if (p_mat.texture) {
 		albedo = albedo * p_mat.texture->sample(p_uv.x * p_mat.uv_scale, p_uv.y * p_mat.uv_scale);
+	}
+	if (p_mat.pattern != Material3D::PATTERN_NONE) {
+		float f = pattern_factor(p_mat, p_world, p_normal);
+		// Fade the contrast with distance to hide aliasing.
+		const float dist = (p_world - camera.position).length();
+		const float fade = std::clamp(1.0f - (dist / std::max(0.01f, p_mat.pattern_scale) - 25.0f) / 40.0f, 0.0f, 1.0f);
+		f = 1.0f + (f - 1.0f) * fade - (1.0f - fade) * 0.12f;
+		albedo = albedo * f;
 	}
 	if (p_mat.unshaded) {
 		return albedo + p_mat.emission;

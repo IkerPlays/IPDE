@@ -1050,6 +1050,15 @@ static void draw_inspector(App &p_app) {
 			g_ed.dirty = true;
 		}
 		drag_float("Brillo propio", &e.emission, 0.02f, 0, 20, "%.2f");
+		{
+			const char *patterns[] = { "Ninguno", "Cuadros", "Ladrillos", "Rayas", "Baldosas", "Ruido" };
+			if (ImGui::Combo("Patrón", &e.pattern, patterns, IM_ARRAYSIZE(patterns))) {
+				g_ed.dirty = true;
+			}
+			if (e.pattern != 0) {
+				drag_float("Tamaño patrón", &e.pattern_scale, 0.01f, 0.05f, 100, "%.2f m");
+			}
+		}
 		text_field("Textura (PNG)", e.texture);
 		if (ImGui::Button("Importar textura...")) {
 			const std::string rel = import_asset(p_app, "Importar textura", "Imágenes PNG", "*.png");

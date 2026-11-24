@@ -160,6 +160,8 @@ void SceneRenderer3D::draw(Renderer3D &p_renderer, const Scene &p_scene, const s
 		mat.double_sided = e.type == EntityType::PLANE || e.type == EntityType::MODEL;
 		mat.texture = get_texture(p_project_dir, e.texture);
 		mat.uv_scale = e.uv_scale;
+		mat.pattern = e.pattern;
+		mat.pattern_scale = e.pattern_scale;
 		if (e.type == EntityType::LIGHT) {
 			mat.unshaded = true;
 			mat.cast_shadows = false;

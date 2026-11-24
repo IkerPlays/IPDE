@@ -34,6 +34,11 @@ struct Material3D {
 	bool cast_shadows = true;
 	const Texture3D *texture = nullptr;
 	float uv_scale = 1.0f;
+	// Procedural pattern computed from the position (no image needed).
+	enum Pattern { PATTERN_NONE, PATTERN_CHECKER, PATTERN_BRICKS, PATTERN_STRIPES, PATTERN_TILES, PATTERN_NOISE, PATTERN_COUNT };
+	int pattern = PATTERN_NONE;
+	float pattern_scale = 1.0f; // Size of one tile in world units.
+	Vec3 pattern_origin; // Set by draw_mesh (the object's position) so patterns move with it.
 };
 
 struct PointLight3D {

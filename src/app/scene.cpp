@@ -141,6 +141,10 @@ Json Scene::to_json() const {
 			je["flip_x"] = true;
 		}
 		je["uv_scale"] = (double)e.uv_scale;
+		if (e.pattern != 0) {
+			je["pattern"] = e.pattern;
+			je["pattern_scale"] = (double)e.pattern_scale;
+		}
 		je["light_energy"] = (double)e.light_energy;
 		je["light_range"] = (double)e.light_range;
 		je["spin_speed"] = (double)e.spin_speed;
@@ -234,6 +238,8 @@ Scene Scene::from_json(const Json &p_json) {
 		en.texture = je["texture"].as_string();
 		en.flip_x = je["flip_x"].as_bool(false);
 		en.uv_scale = (float)je["uv_scale"].as_number(1.0);
+		en.pattern = std::clamp((int)je["pattern"].as_number(0), 0, 5);
+		en.pattern_scale = (float)je["pattern_scale"].as_number(1.0);
 		en.light_energy = (float)je["light_energy"].as_number(en.light_energy);
 		en.light_range = (float)je["light_range"].as_number(en.light_range);
 		en.spin_speed = (float)je["spin_speed"].as_number(0);
@@ -451,6 +457,8 @@ static Scene example_scene_3d() {
 
 	Entity ground = make3d("Suelo", EntityType::CUBE, 0, -0.25f, 0, 24, 0.5f, 24, 0xFF4B5578);
 	ground.roughness = 0.9f;
+	ground.pattern = 1; // Checker.
+	ground.pattern_scale = 2.0f;
 	s.entities.push_back(ground);
 
 	Entity player = make3d("Jugador", EntityType::CAPSULE, 0, 1, 4, 1, 2, 1, 0xFF6C7BFF);
@@ -489,7 +497,9 @@ static Scene example_scene_3d() {
 	s.entities.push_back(top_coin);
 
 	// A moving platform that lifts the player to a tower with the goal on top.
-	Entity tower = make3d("Torre", EntityType::CUBE, -8, 2, -8.5f, 3, 4, 3, 0xFF7C6CF0);
+	Entity tower = make3d("Torre", EntityType::CUBE, -8, 2, -8.5f, 3, 4, 3, 0xFFB0705A);
+	tower.pattern = 2; // Bricks.
+	tower.pattern_scale = 0.6f;
 	s.entities.push_back(tower);
 	Entity lift = make3d("Plataforma móvil", EntityType::CUBE, -8, 0.2f, -5.0f, 3, 0.4f, 3, 0xFFE8E8F0);
 	lift.move_y = 3.8f;
