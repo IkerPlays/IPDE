@@ -41,7 +41,10 @@ struct EditorState {
 	float drag3d_start_y = 0.0f;
 	// Move gizmo (axis arrows).
 	int gizmo_axis = -1; // Axis being dragged (0 = X, 1 = Y, 2 = Z).
+	int gizmo_mode = 0; // 0 = move, 1 = rotate, 2 = scale.
 	Vec3 gizmo_start_pos;
+	Vec3 gizmo_start_rot;
+	Vec3 gizmo_start_size;
 	ImVec2 gizmo_start_mouse;
 	bool show_grid = true;
 	bool preview_animation = false;
@@ -692,6 +695,9 @@ static void draw_viewport_3d(App &p_app, float p_width) {
 	float gizmo_len = 1.0f;
 	if (g_ed.selected >= 0 && g_ed.selected < (int)g_ed.scene.entities.size() && entity_type_is_3d(g_ed.scene.entities[g_ed.selected].type)) {
 		const Entity &e = g_ed.scene.entities[g_ed.selected];
+		if (e.type == EntityType::LIGHT) {
+			g_ed.gizmo_mode = 0; // Lights can only be moved.
+		}
 		const Vec3 p(e.x, e.y, e.z);
 		// Constant size on screen: proportional to the distance to the camera.
 		gizmo_len = std::max(0.05f, (p - cam.position).length() * 0.16f * std::tan(cam.fov * DEG2RAD * 0.5f) / std::tan(30.0f * DEG2RAD));
@@ -728,15 +734,42 @@ static void draw_viewport_3d(App &p_app, float p_width) {
 			const int k = g_ed.gizmo_axis;
 			const float vx = gizmo_end[k].x - gizmo_origin.x, vy = gizmo_end[k].y - gizmo_origin.y;
 			const float len2 = std::max(1.0f, vx * vx + vy * vy);
-			float amount = ((mx - g_ed.gizmo_start_mouse.x) * vx + (my - g_ed.gizmo_start_mouse.y) * vy) / len2 * gizmo_len;
-			float v = (k == 0 ? g_ed.gizmo_start_pos.x : (k == 1 ? g_ed.gizmo_start_pos.y : g_ed.gizmo_start_pos.z)) + amount;
-			if (io.KeyCtrl) {
-				v = std::round(v * 2.0f) / 2.0f;
-			}
-			float &target = k == 0 ? e.x : (k == 1 ? e.y : e.z);
-			if (target != v) {
-				target = v;
-				g_ed.dirty = true;
+			const float along = ((mx - g_ed.gizmo_start_mouse.x) * vx + (my - g_ed.gizmo_start_mouse.y) * vy) / len2; // In arrow lengths.
+			auto comp = [](Vec3 &r_v, int p_k) -> float & { return p_k == 0 ? r_v.x : (p_k == 1 ? r_v.y : r_v.z); };
+			if (g_ed.gizmo_mode == 1) { // Rotate around the axis.
+				Vec3 r = g_ed.gizmo_start_rot;
+				float v = comp(r, k) + along * 90.0f;
+				if (io.KeyCtrl) {
+					v = std::round(v / 15.0f) * 15.0f;
+				}
+				float &target = k == 0 ? e.rot_x : (k == 1 ? e.rot_y : e.rotation);
+				if (target != v) {
+					target = v;
+					g_ed.dirty = true;
+				}
+			} else if (g_ed.gizmo_mode == 2) { // Scale along the axis (spheres scale uniformly).
+				Vec3 sz = g_ed.gizmo_start_size;
+				const int axis = e.type == EntityType::SPHERE ? 0 : k;
+				float v = std::max(0.05f, comp(sz, axis) * (1.0f + along));
+				if (io.KeyCtrl) {
+					v = std::max(0.25f, std::round(v * 4.0f) / 4.0f);
+				}
+				float &target = axis == 0 ? e.width : (axis == 1 ? e.height : e.depth);
+				if (target != v) {
+					target = v;
+					g_ed.dirty = true;
+				}
+			} else {
+				Vec3 sp = g_ed.gizmo_start_pos;
+				float v = comp(sp, k) + along * gizmo_len;
+				if (io.KeyCtrl) {
+					v = std::round(v * 2.0f) / 2.0f;
+				}
+				float &target = k == 0 ? e.x : (k == 1 ? e.y : e.z);
+				if (target != v) {
+					target = v;
+					g_ed.dirty = true;
+				}
 			}
 		} else {
 			g_ed.gizmo_axis = -1;
@@ -748,6 +781,8 @@ static void draw_viewport_3d(App &p_app, float p_width) {
 		const Entity &e = g_ed.scene.entities[g_ed.selected];
 		g_ed.gizmo_axis = gizmo_hover;
 		g_ed.gizmo_start_pos = Vec3(e.x, e.y, e.z);
+		g_ed.gizmo_start_rot = Vec3(e.rot_x, e.rot_y, e.rotation);
+		g_ed.gizmo_start_size = Vec3(e.width, e.height, e.depth);
 		g_ed.gizmo_start_mouse = ImVec2(mx, my);
 	} else if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
 		const uint32_t id = g_r3d.pick((int)mx, (int)my);
@@ -825,15 +860,24 @@ static void draw_viewport_3d(App &p_app, float p_width) {
 			dy /= len;
 			const float head = 12.0f * s;
 			const ImVec2 base(e.x - dx * head, e.y - dy * head);
-			dl->AddLine(o, base, c, th);
-			dl->AddTriangleFilled(e, ImVec2(base.x - dy * head * 0.45f, base.y + dx * head * 0.45f), ImVec2(base.x + dy * head * 0.45f, base.y - dx * head * 0.45f), c);
+			if (g_ed.gizmo_mode == 0) {
+				dl->AddLine(o, base, c, th);
+				dl->AddTriangleFilled(e, ImVec2(base.x - dy * head * 0.45f, base.y + dx * head * 0.45f), ImVec2(base.x + dy * head * 0.45f, base.y - dx * head * 0.45f), c);
+			} else if (g_ed.gizmo_mode == 1) {
+				dl->AddLine(o, e, c, th);
+				dl->AddCircle(e, head * 0.55f, c, 16, th);
+			} else {
+				dl->AddLine(o, e, c, th);
+				const float q = head * 0.42f;
+				dl->AddRectFilled(ImVec2(e.x - q, e.y - q), ImVec2(e.x + q, e.y + q), c);
+			}
 		}
 		dl->AddCircleFilled(o, 4.5f * s, IM_COL32(255, 255, 255, 230));
 	}
 
 	// Overlay: help and view options.
 	char info[200];
-	snprintf(info, sizeof(info), "%zu triángulos   ·   Clic: seleccionar   ·   Flechas o arrastrar: mover (Mayús: altura, Ctrl: ajustar)   ·   Botón dcho: girar   ·   Rueda: zoom   ·   F: enfocar", g_r3d.get_triangle_count());
+	snprintf(info, sizeof(info), "%zu triángulos   ·   Clic: seleccionar   ·   W/E/R: mover, rotar, escalar · Ctrl: ajustar   ·   Botón dcho: girar   ·   Rueda: zoom   ·   F: enfocar", g_r3d.get_triangle_count());
 	dl->AddText(ImVec2(pos.x + 11 * s, pos.y + size.y - 27 * s), IM_COL32(0, 0, 0, 120), info);
 	dl->AddText(ImVec2(pos.x + 10 * s, pos.y + size.y - 28 * s), IM_COL32(255, 255, 255, 200), info);
 	ImGui::SetCursorScreenPos(ImVec2(pos.x + 10 * s, pos.y + 10 * s));
@@ -843,6 +887,22 @@ static void draw_viewport_3d(App &p_app, float p_width) {
 	ImGui::SameLine();
 	if (ImGui::Checkbox("Animar", &g_ed.preview_animation)) {
 		g_ed.preview_start = platform::get_time();
+	}
+	{
+		const char *modes[3] = { "Mover (W)", "Rotar (E)", "Escalar (R)" };
+		for (int m = 0; m < 3; m++) {
+			ImGui::SameLine(0, m == 0 ? 24 * s : 4 * s);
+			const bool active = g_ed.gizmo_mode == m;
+			if (active) {
+				ImGui::PushStyleColor(ImGuiCol_Button, theme::ACCENT);
+			}
+			if (ImGui::Button(modes[m])) {
+				g_ed.gizmo_mode = m;
+			}
+			if (active) {
+				ImGui::PopStyleColor();
+			}
+		}
 	}
 	ImGui::PopStyleColor();
 	ImGui::EndChild();
@@ -1480,6 +1540,15 @@ void draw_editor(App &p_app) {
 	}
 	if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D, false)) {
 		duplicate_selected();
+	}
+	if (!io.WantTextInput && !io.KeyCtrl && g_ed.scene.is_3d) {
+		if (ImGui::IsKeyPressed(ImGuiKey_W, false)) {
+			g_ed.gizmo_mode = 0;
+		} else if (ImGui::IsKeyPressed(ImGuiKey_E, false)) {
+			g_ed.gizmo_mode = 1;
+		} else if (ImGui::IsKeyPressed(ImGuiKey_R, false)) {
+			g_ed.gizmo_mode = 2;
+		}
 	}
 	if (!io.WantTextInput && !io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_F, false)) {
 		focus_selected();
