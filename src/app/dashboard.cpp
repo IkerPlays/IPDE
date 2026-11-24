@@ -6,6 +6,9 @@
 #include "version.h"
 
 #include <imgui_internal.h>
+#include <stb/stb_image.h>
+
+#include <map>
 
 #include <algorithm>
 #include <cctype>
@@ -53,6 +56,37 @@ static std::string format_date(int64_t p_unix) {
 	char buf[32];
 	strftime(buf, sizeof(buf), "%d/%m/%Y", localtime(&t));
 	return buf;
+}
+
+// Project thumbnails (thumbnail.png, written by the editor when saving).
+static std::map<std::string, ImTextureID> g_thumbnails;
+
+static ImTextureID get_thumbnail(App &p_app, const std::string &p_project_dir) {
+	auto it = g_thumbnails.find(p_project_dir);
+	if (it != g_thumbnails.end()) {
+		return it->second;
+	}
+	ImTextureID id = ImTextureID_Invalid;
+	std::string data;
+	if (fs::read_file(fs::join(p_project_dir, "thumbnail.png"), data)) {
+		int w = 0, h = 0, n = 0;
+		unsigned char *px = stbi_load_from_memory((const unsigned char *)data.data(), (int)data.size(), &w, &h, &n, 4);
+		if (px) {
+			id = p_app.renderer.create_texture(px, w, h);
+			stbi_image_free(px);
+		}
+	}
+	g_thumbnails[p_project_dir] = id;
+	return id;
+}
+
+void dashboard_forget_thumbnails(App &p_app) {
+	for (auto &it : g_thumbnails) {
+		if (it.second != ImTextureID_Invalid) {
+			p_app.renderer.destroy_texture(it.second);
+		}
+	}
+	g_thumbnails.clear();
 }
 
 static ImU32 project_color(const std::string &p_name) {
@@ -292,6 +326,10 @@ static void draw_import_popup(App &p_app) {
 	ImGui::EndPopup();
 }
 
+static bool missing_project(const RecentProject &p_rp) {
+	return !fs::exists(fs::join(p_rp.path, "project.ipde"));
+}
+
 static void draw_projects(App &p_app) {
 	const float s = p_app.scale();
 	ui::section_title("Proyectos");
@@ -343,11 +381,11 @@ static void draw_projects(App &p_app) {
 	// Project cards in a responsive grid.
 	std::string filter = g_search;
 	std::transform(filter.begin(), filter.end(), filter.begin(), ::tolower);
-	const float card_w_min = 300 * s;
+	const float card_w_min = 380 * s;
 	const float avail_w = ImGui::GetContentRegionAvail().x;
 	const int columns = std::max(1, (int)((avail_w + 12 * s) / (card_w_min + 12 * s)));
 	const float card_w = (avail_w - (columns - 1) * 12 * s) / columns;
-	const float card_h = 118 * s;
+	const float card_h = 100 * s;
 	std::string to_open;
 	std::string to_remove;
 	int col = 0;
@@ -362,6 +400,7 @@ static void draw_projects(App &p_app) {
 			ImGui::SameLine(0, 12 * s);
 		}
 		ImGui::PushID(rp.path.c_str());
+		ImGui::BeginGroup(); // So the next card on the row lines up with this one.
 		const ImVec2 pos = ImGui::GetCursorScreenPos();
 		const bool clicked = ImGui::InvisibleButton("card", ImVec2(card_w, card_h));
 		const bool hovered = ImGui::IsItemHovered();
@@ -369,15 +408,21 @@ static void draw_projects(App &p_app) {
 		ImDrawList *dl = ImGui::GetWindowDrawList();
 		dl->AddRectFilled(pos, ImVec2(pos.x + card_w, pos.y + card_h), hovered ? theme::PANEL_HOVER : theme::PANEL, 12 * s);
 		dl->AddRect(pos, ImVec2(pos.x + card_w, pos.y + card_h), hovered ? theme::ACCENT : theme::BORDER, 12 * s, 0, 1.0f);
-		// Avatar with the initial.
-		const ImVec2 av(pos.x + 18 * s, pos.y + 18 * s);
-		const float avs = 46 * s;
-		dl->AddRectFilled(av, ImVec2(av.x + avs, av.y + avs), project_color(rp.name), 10 * s);
-		const char initial[2] = { rp.name.empty() ? '?' : (char)toupper((unsigned char)rp.name[0]), 0 };
+		// Thumbnail (or a colored tile with the initial).
+		const ImVec2 av(pos.x + 14 * s, pos.y + 14 * s);
+		const float thumb_w = 128 * s, thumb_h = 72 * s;
 		ImFont *font = ImGui::GetFont();
-		const float big = ImGui::GetStyle().FontSizeBase * 1.6f;
-		const ImVec2 isz = font->CalcTextSizeA(big, FLT_MAX, 0, initial);
-		dl->AddText(font, big, ImVec2(av.x + (avs - isz.x) * 0.5f, av.y + (avs - isz.y) * 0.5f), IM_COL32(255, 255, 255, 255), initial);
+		const ImTextureID thumb = missing_project(rp) ? ImTextureID_Invalid : get_thumbnail(p_app, rp.path);
+		if (thumb != ImTextureID_Invalid) {
+			dl->AddImageRounded(ImTextureRef(thumb), av, ImVec2(av.x + thumb_w, av.y + thumb_h), ImVec2(0, 0), ImVec2(1, 1), IM_COL32_WHITE, 8 * s);
+		} else {
+			dl->AddRectFilled(av, ImVec2(av.x + thumb_w, av.y + thumb_h), project_color(rp.name), 8 * s);
+			const char initial[2] = { rp.name.empty() ? '?' : (char)toupper((unsigned char)rp.name[0]), 0 };
+			const float big = ImGui::GetStyle().FontSizeBase * 1.8f;
+			const ImVec2 isz = font->CalcTextSizeA(big, FLT_MAX, 0, initial);
+			dl->AddText(font, big, ImVec2(av.x + (thumb_w - isz.x) * 0.5f, av.y + (thumb_h - isz.y) * 0.5f), IM_COL32(255, 255, 255, 255), initial);
+		}
+		const float avs = thumb_w;
 		// Texts.
 		const float tx = av.x + avs + 14 * s;
 		const float tw = pos.x + card_w - tx - 14 * s;
@@ -387,7 +432,7 @@ static void draw_projects(App &p_app) {
 		dl->PopClipRect();
 		const bool missing = !fs::exists(fs::join(rp.path, "project.ipde"));
 		const std::string footer = missing ? "Carpeta no encontrada" : "Abierto " + format_date(rp.last_opened);
-		dl->AddText(ImVec2(av.x, pos.y + card_h - 32 * s), missing ? theme::DANGER : theme::TEXT_DIM, footer.c_str());
+		dl->AddText(ImVec2(tx, pos.y + card_h - 32 * s), missing ? theme::DANGER : theme::TEXT_DIM, footer.c_str());
 		// Actions.
 		ImGui::SetCursorScreenPos(ImVec2(pos.x + card_w - 96 * s, pos.y + card_h - 40 * s));
 		if (!missing && ui::accent_button("Abrir", ImVec2(80 * s, 0))) {
@@ -411,9 +456,7 @@ static void draw_projects(App &p_app) {
 		}
 		ImGui::SetCursorScreenPos(ImVec2(pos.x, pos.y + card_h));
 		ImGui::Dummy(ImVec2(card_w, 0));
-		if (col == 0) {
-			// Keep rows aligned.
-		}
+		ImGui::EndGroup();
 		ImGui::PopID();
 		col = (col + 1) % columns;
 		if (col == 0) {

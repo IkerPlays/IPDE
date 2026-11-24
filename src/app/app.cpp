@@ -264,6 +264,7 @@ void App::open_project(const std::string &p_folder) {
 }
 
 void App::close_project() {
+	dashboard_forget_thumbnails(*this);
 	screen = Screen::DASHBOARD;
 	platform::set_window_title("IPDE");
 }

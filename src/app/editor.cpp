@@ -5,6 +5,7 @@
 #include "app/scene3d.h"
 #include "core/audio.h"
 #include "core/fs.h"
+#include "core/image.h"
 #include "platform/platform.h"
 #include "render3d/renderer3d.h"
 #include "version.h"
@@ -48,6 +49,7 @@ struct EditorState {
 
 	bool show_close_dialog = false;
 	std::string last_export;
+	ImVec2 view2d_pos, view2d_size; // 2D viewport rectangle on screen (for thumbnails).
 
 	// Undo / redo: snapshots of the scene (JSON) taken when an edit finishes.
 	std::vector<std::string> undo_stack;
@@ -184,7 +186,43 @@ static bool color_edit(const char *p_label, uint32_t *p_argb, bool p_alpha = fal
 	return changed;
 }
 
+// Saves a 16:9 picture of the viewport as the project's thumbnail (shown in the dashboard).
+static void save_thumbnail(App &p_app) {
+	if (!p_app.project.scenes.empty() && g_ed.scene_file != p_app.project.scenes[0]) {
+		return; // Only the first level represents the project.
+	}
+	const uint32_t *src = nullptr;
+	int sw = 0, sh = 0, stride = 0, x0 = 0, y0 = 0;
+	if (g_ed.scene.is_3d) {
+		src = g_r3d.get_pixels();
+		sw = g_r3d.get_width();
+		sh = g_r3d.get_height();
+		stride = sw;
+	} else {
+		src = p_app.renderer.get_pixels();
+		stride = p_app.renderer.get_width();
+		x0 = std::max(0, (int)g_ed.view2d_pos.x);
+		y0 = std::max(0, (int)g_ed.view2d_pos.y);
+		sw = std::min((int)g_ed.view2d_size.x, p_app.renderer.get_width() - x0);
+		sh = std::min((int)g_ed.view2d_size.y, p_app.renderer.get_height() - y0);
+	}
+	if (!src || sw < 32 || sh < 32) {
+		return;
+	}
+	// Center crop to 16:9.
+	int cw = sw, ch = sw * 9 / 16;
+	if (ch > sh) {
+		ch = sh;
+		cw = sh * 16 / 9;
+	}
+	x0 += (sw - cw) / 2;
+	y0 += (sh - ch) / 2;
+	const std::vector<uint32_t> small = image::downscale(src + (size_t)y0 * stride + x0, cw, ch, stride, 320, 180);
+	image::write_png(fs::join(p_app.project.path, "thumbnail.png"), small.data(), 320, 180);
+}
+
 static bool save(App &p_app) {
+	save_thumbnail(p_app);
 	if (g_ed.scene.save(p_app.project.get_scene_path(g_ed.scene_file))) {
 		g_ed.dirty = false;
 		p_app.toast("Escena guardada.");
@@ -1265,6 +1303,8 @@ static void draw_viewport_2d(App &p_app, float p_width) {
 	ImGui::BeginChild("Viewport", ImVec2(p_width, 0), ImGuiChildFlags_Borders);
 	const ImVec2 pos = ImGui::GetCursorScreenPos();
 	const ImVec2 size = ImGui::GetContentRegionAvail();
+	g_ed.view2d_pos = pos;
+	g_ed.view2d_size = size;
 	ImGui::InvisibleButton("canvas", size, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight | ImGuiButtonFlags_MouseButtonMiddle);
 	const bool hovered = ImGui::IsItemHovered();
 	ImDrawList *dl = ImGui::GetWindowDrawList();

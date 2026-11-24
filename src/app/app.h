@@ -108,6 +108,8 @@ private:
 
 // UI pieces (dashboard.cpp / editor.cpp).
 void draw_dashboard(App &p_app);
+// Forgets the loaded project thumbnails (they are reloaded when the dashboard is shown again).
+void dashboard_forget_thumbnails(App &p_app);
 void draw_editor(App &p_app);
 bool editor_has_unsaved_changes();
 void editor_open(App &p_app);
