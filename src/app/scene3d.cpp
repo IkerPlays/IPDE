@@ -28,10 +28,18 @@ Environment3D SceneRenderer3D::make_environment(const Scene &p_scene) {
 	return env;
 }
 
+float SceneRenderer3D::motion_factor(const Entity &p_e, double p_time) {
+	const double period = std::max(0.05, (double)p_e.move_time) * 2.0;
+	return (float)(0.5 - 0.5 * std::cos(p_time / period * 2.0 * PI));
+}
+
 Vec3 SceneRenderer3D::entity_position(const Entity &p_e, double p_time, bool p_animate) {
 	Vec3 p(p_e.x, p_e.y, p_e.z);
 	if (p_animate && p_e.bob_amplitude != 0.0f) {
 		p.y += p_e.bob_amplitude * (float)std::sin(p_time * p_e.bob_frequency * 2.0 * PI);
+	}
+	if (p_animate && p_e.has_motion()) {
+		p += Vec3(p_e.move_x, p_e.move_y, p_e.move_z) * motion_factor(p_e, p_time);
 	}
 	return p;
 }

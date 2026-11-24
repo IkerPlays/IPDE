@@ -69,6 +69,16 @@ struct Entity {
 	bool camera_follow = false;
 	bool collectible = false; // Disappears and adds a point when the player touches it.
 	bool solid = true; // The player collides with it.
+	// Moving platform: goes from its position to position + move and back.
+	float move_x = 0.0f, move_y = 0.0f, move_z = 0.0f;
+	float move_time = 2.0f; // Seconds for one way.
+	bool hazard = false; // Touching it sends the player back to the start.
+	bool goal = false; // Touching it completes the level.
+	float bounce = 0.0f; // Jump pad: upward speed given to the player (0 = off).
+	float chase_speed = 0.0f; // Enemy: follows the player when near (0 = off).
+	float chase_range = 8.0f;
+
+	bool has_motion() const { return move_x != 0.0f || move_y != 0.0f || move_z != 0.0f; }
 };
 
 struct Environment {

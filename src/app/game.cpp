@@ -32,6 +32,11 @@ static void entity_animated_transform(const Entity &p_e, double p_time, bool p_a
 	if (p_e.bob_amplitude != 0.0f) {
 		r_y += p_e.bob_amplitude * (float)std::sin(p_time * p_e.bob_frequency * 6.283185307);
 	}
+	if (p_e.has_motion()) {
+		const float f = SceneRenderer3D::motion_factor(p_e, p_time);
+		r_x += p_e.move_x * f;
+		r_y += p_e.move_y * f;
+	}
 }
 
 void draw_scene(ImDrawList *p_dl, const Scene &p_scene, ImVec2 p_origin, float p_zoom, ImFont *p_font, double p_time, bool p_animate) {
@@ -95,8 +100,53 @@ static Box entity_box(const Entity &p_e, const Vec3 &p_pos) {
 	return { p_pos - half, p_pos + half };
 }
 
-static bool is_static_solid(const Entity &p_e) {
-	return p_e.visible && p_e.solid && !p_e.player && !p_e.collectible && p_e.type != EntityType::TEXT && p_e.type != EntityType::LIGHT && p_e.spin_speed == 0.0f && p_e.bob_amplitude == 0.0f;
+static bool is_solid_2d(const Entity &p_e) {
+	return p_e.visible && p_e.solid && !p_e.player && !p_e.collectible && !p_e.goal && p_e.chase_speed == 0.0f && p_e.type != EntityType::TEXT && p_e.type != EntityType::LIGHT && p_e.spin_speed == 0.0f;
+}
+
+// 3D: moving and bobbing objects are solid too (they carry the player).
+static bool is_solid_3d(const Entity &p_e) {
+	return p_e.visible && p_e.solid && !p_e.player && !p_e.collectible && !p_e.goal && p_e.chase_speed == 0.0f && p_e.type != EntityType::LIGHT && p_e.spin_speed == 0.0f;
+}
+
+struct GameStatus {
+	int deaths = 0;
+	double goal_time = 0; // When the goal was reached (0 = not yet).
+	double level_time = 0; // Seconds it took.
+	double death_flash = -10; // Last time the player died.
+};
+
+static void draw_banner(ImFont *p_font, const char *p_msg, const char *p_sub, int p_w, float p_y, ImU32 p_color) {
+	ImDrawList *fg = ImGui::GetForegroundDrawList();
+	const float big = 44.0f;
+	const ImVec2 ms = p_font->CalcTextSizeA(big, FLT_MAX, 0, p_msg);
+	const ImVec2 ss = p_sub ? p_font->CalcTextSizeA(22.0f, FLT_MAX, 0, p_sub) : ImVec2(0, 0);
+	const float bw = std::max(ms.x, ss.x);
+	const ImVec2 mp(((float)p_w - bw) * 0.5f, p_y);
+	const float bh = ms.y + (p_sub ? ss.y + 6 : 0);
+	fg->AddRectFilled(ImVec2(mp.x - 24, mp.y - 14), ImVec2(mp.x + bw + 24, mp.y + bh + 14), IM_COL32(16, 17, 31, 210), 14);
+	fg->AddText(p_font, big, ImVec2(((float)p_w - ms.x) * 0.5f, mp.y), p_color, p_msg);
+	if (p_sub) {
+		fg->AddText(p_font, 22.0f, ImVec2(((float)p_w - ss.x) * 0.5f, mp.y + ms.y + 6), IM_COL32(220, 222, 240, 255), p_sub);
+	}
+}
+
+static void draw_status(ImFont *p_font, const GameStatus &p_st, double p_now, int p_w, int p_h) {
+	ImDrawList *fg = ImGui::GetForegroundDrawList();
+	if (p_st.deaths > 0) {
+		char buf[48];
+		snprintf(buf, sizeof(buf), "Caídas: %d", p_st.deaths);
+		fg->AddText(p_font, 22.0f, ImVec2(14, (float)p_h - 36), IM_COL32(255, 255, 255, 200), buf);
+	}
+	if (p_now - p_st.death_flash < 0.35) {
+		const int a = (int)(140 * (1.0 - (p_now - p_st.death_flash) / 0.35));
+		fg->AddRectFilled(ImVec2(0, 0), ImVec2((float)p_w, (float)p_h), IM_COL32(255, 40, 60, a));
+	}
+	if (p_st.goal_time > 0) {
+		char sub[96];
+		snprintf(sub, sizeof(sub), "Tiempo: %.1f s   ·   Caídas: %d   ·   Esc para salir", p_st.level_time, p_st.deaths);
+		draw_banner(p_font, "¡Nivel completado!", sub, p_w, (float)p_h * 0.38f, IM_COL32(61, 220, 132, 255));
+	}
 }
 
 static void draw_hud(ImFont *p_font, int p_score, int p_total, double p_time_all_collected, double p_now, int p_w) {
@@ -111,12 +161,7 @@ static void draw_hud(ImFont *p_font, int p_score, int p_total, double p_time_all
 		fg->AddRectFilled(ImVec2(pos.x - 14, pos.y - 8), ImVec2(pos.x + ts.x + 14, pos.y + ts.y + 8), IM_COL32(16, 17, 31, 170), 10);
 		fg->AddText(p_font, size, pos, IM_COL32(255, 197, 61, 255), buf);
 		if (p_score == p_total && p_time_all_collected > 0 && p_now - p_time_all_collected < 4.0) {
-			const char *msg = "¡Has recogido todas las monedas!";
-			const float big = 44.0f;
-			const ImVec2 ms = p_font->CalcTextSizeA(big, FLT_MAX, 0, msg);
-			const ImVec2 mp(((float)p_w - ms.x) * 0.5f, 90);
-			fg->AddRectFilled(ImVec2(mp.x - 24, mp.y - 14), ImVec2(mp.x + ms.x + 24, mp.y + ms.y + 14), IM_COL32(16, 17, 31, 200), 14);
-			fg->AddText(p_font, big, mp, IM_COL32(255, 255, 255, 255), msg);
+			draw_banner(p_font, "¡Has recogido todas las monedas!", nullptr, p_w, 90, IM_COL32(255, 255, 255, 255));
 		}
 	}
 }
@@ -141,8 +186,34 @@ struct Game3D {
 	int score = 0;
 	int total = 0;
 	double all_collected_time = 0;
+	GameStatus status;
+	int ground = -1; // Entity the player stands on.
+	double prev_time = 0;
+	std::vector<Vec3> start_positions; // For enemies (reset when the player dies).
+
+	void die(double now) {
+		Entity &p = scene.entities[player];
+		p.x = spawn.x;
+		p.y = spawn.y;
+		p.z = spawn.z;
+		velocity_y = 0;
+		ground = -1;
+		status.deaths++;
+		status.death_flash = now;
+		for (size_t i = 0; i < scene.entities.size(); i++) {
+			Entity &e = scene.entities[i];
+			if (e.chase_speed != 0.0f) {
+				e.x = start_positions[i].x;
+				e.y = start_positions[i].y;
+				e.z = start_positions[i].z;
+			}
+		}
+	}
 
 	void init() {
+		for (const Entity &e : scene.entities) {
+			start_positions.push_back(Vec3(e.x, e.y, e.z));
+		}
 		for (size_t i = 0; i < scene.entities.size(); i++) {
 			const Entity &e = scene.entities[i];
 			if (e.player && player < 0) {
@@ -163,8 +234,30 @@ struct Game3D {
 	}
 
 	void update(float dt, double now) {
-		if (player >= 0) {
+		if (player >= 0 && status.goal_time == 0) {
 			Entity &p = scene.entities[player];
+			// Enemies walk towards the player when it is near.
+			for (Entity &e : scene.entities) {
+				if (e.chase_speed == 0.0f || !e.visible) {
+					continue;
+				}
+				Vec3 d(p.x - e.x, 0, p.z - e.z);
+				const float dist = d.length();
+				if (dist < e.chase_range && dist > 0.05f) {
+					d = d * (1.0f / dist);
+					e.x += d.x * e.chase_speed * dt;
+					e.z += d.z * e.chase_speed * dt;
+					e.rot_y = std::atan2(d.x, d.z) / DEG2RAD;
+				}
+			}
+			// Standing on a moving platform carries the player with it.
+			if (ground >= 0 && on_ground) {
+				const Entity &g = scene.entities[ground];
+				const Vec3 delta = SceneRenderer3D::entity_position(g, now, true) - SceneRenderer3D::entity_position(g, prev_time, true);
+				p.x += delta.x;
+				p.y += delta.y;
+				p.z += delta.z;
+			}
 			// Movement relative to the camera.
 			float mx = 0, mz = 0;
 			if (ImGui::IsKeyDown(ImGuiKey_A) || ImGui::IsKeyDown(ImGuiKey_LeftArrow)) {
@@ -201,21 +294,27 @@ struct Game3D {
 			Vec3 pos(p.x, p.y, p.z);
 			const float moves[3] = { delta.x, velocity_y * dt, delta.z };
 			on_ground = false;
+			ground = -1;
+			float bounce = 0.0f;
 			for (int axis = 0; axis < 3; axis++) {
 				if (moves[axis] == 0) {
 					continue;
 				}
 				(axis == 0 ? pos.x : (axis == 1 ? pos.y : pos.z)) += moves[axis];
 				Box pb = entity_box(p, pos);
-				for (const Entity &o : scene.entities) {
-					if (&o == &p || !is_static_solid(o)) {
+				for (size_t oi = 0; oi < scene.entities.size(); oi++) {
+					const Entity &o = scene.entities[oi];
+					if (&o == &p || !is_solid_3d(o)) {
 						continue;
 					}
-					const Box ob = entity_box(o, Vec3(o.x, o.y, o.z));
+					const Box ob = entity_box(o, SceneRenderer3D::entity_position(o, now, true));
 					if (!pb.overlaps(ob)) {
 						continue;
 					}
-					if (axis == 0) {
+					const float step = ob.max.y - pb.min.y;
+					if (axis != 1 && step <= 0.35f && velocity_y <= 1.0f) {
+						pos.y += step + 0.001f; // Small ledge: step up onto it.
+					} else if (axis == 0) {
 						pos.x += moves[0] > 0 ? (ob.min.x - pb.max.x) : (ob.max.x - pb.min.x);
 					} else if (axis == 2) {
 						pos.z += moves[2] > 0 ? (ob.min.z - pb.max.z) : (ob.max.z - pb.min.z);
@@ -223,6 +322,8 @@ struct Game3D {
 						if (moves[1] < 0) {
 							pos.y += ob.max.y - pb.min.y;
 							on_ground = true;
+							ground = (int)oi;
+							bounce = std::max(bounce, o.bounce);
 						} else {
 							pos.y += ob.min.y - pb.max.y;
 						}
@@ -231,13 +332,18 @@ struct Game3D {
 					pb = entity_box(p, pos);
 				}
 			}
-			if (pos.y < -40.0f) {
-				pos = spawn;
-				velocity_y = 0;
+			if (bounce > 0.0f) {
+				velocity_y = bounce; // Jump pad.
+				on_ground = false;
+				ground = -1;
 			}
 			p.x = pos.x;
 			p.y = pos.y;
 			p.z = pos.z;
+			if (pos.y < -40.0f) {
+				die(now);
+				pos = spawn;
+			}
 
 			// Collectibles.
 			const Box pb = entity_box(p, pos);
@@ -250,7 +356,22 @@ struct Game3D {
 					}
 				}
 			}
+			// Hazards and the goal.
+			for (const Entity &o : scene.entities) {
+				if (!o.visible || (!o.hazard && !o.goal)) {
+					continue;
+				}
+				if (pb.overlaps(entity_box(o, SceneRenderer3D::entity_position(o, now, true)))) {
+					if (o.hazard) {
+						die(now);
+						break;
+					}
+					status.goal_time = now;
+					status.level_time = now;
+				}
+			}
 		}
+		prev_time = now;
 
 		// Camera.
 		if (ImGui::IsKeyDown(ImGuiKey_Q)) {
@@ -368,6 +489,8 @@ int run_game(const std::string &p_project_dir) {
 	int score2d = 0;
 	int total2d = 0;
 	double all2d_time = 0;
+	GameStatus status2d;
+	const std::vector<Entity> initial2d = ents;
 	for (const Entity &e : ents) {
 		if (e.collectible && e.visible) {
 			total2d++;
@@ -406,6 +529,7 @@ int run_game(const std::string &p_project_dir) {
 		if (scene.is_3d) {
 			game3d.update(dt, t);
 			draw_hud(font, game3d.score, game3d.total, game3d.all_collected_time, t, w);
+			draw_status(font, game3d.status, t, w, h);
 			if (show_stats) {
 				char stats[128];
 				snprintf(stats, sizeof(stats), "%.0f FPS  ·  %.1f ms  ·  %d%%  ·  %zu tri", 1.0 / std::max(1e-6, frame_avg), frame_avg * 1000.0, (int)std::lround(render_scale * 100), game3d.renderer.get_triangle_count());
@@ -450,8 +574,20 @@ int run_game(const std::string &p_project_dir) {
 				my /= len;
 			}
 			for (Entity &p : ents) {
-				if (!p.player) {
+				if (!p.player || status2d.goal_time > 0) {
 					continue;
+				}
+				// Enemies.
+				for (Entity &e : ents) {
+					if (e.chase_speed == 0.0f || !e.visible) {
+						continue;
+					}
+					const float dx = p.x - e.x, dy = p.y - e.y;
+					const float dist = std::sqrt(dx * dx + dy * dy);
+					if (dist < e.chase_range && dist > 0.5f) {
+						e.x += dx / dist * e.chase_speed * dt;
+						e.y += dy / dist * e.chase_speed * dt;
+					}
 				}
 				for (int axis = 0; axis < 2; axis++) {
 					const float delta = (axis == 0 ? mx : my) * p.player_speed * dt;
@@ -461,10 +597,12 @@ int run_game(const std::string &p_project_dir) {
 					(axis == 0 ? p.x : p.y) += delta;
 					Box pb = entity_box(p, Vec3(p.x, p.y, 0));
 					for (const Entity &o : ents) {
-						if (&o == &p || !is_static_solid(o)) {
+						if (&o == &p || !is_solid_2d(o)) {
 							continue;
 						}
-						const Box ob = entity_box(o, Vec3(o.x, o.y, 0));
+						float ox, oy, orot;
+						entity_animated_transform(o, t, true, ox, oy, orot);
+						const Box ob = entity_box(o, Vec3(ox, oy, 0));
 						if (pb.overlaps(ob)) {
 							if (axis == 0) {
 								p.x += delta > 0 ? (ob.min.x - pb.max.x) : (ob.max.x - pb.min.x);
@@ -491,6 +629,34 @@ int run_game(const std::string &p_project_dir) {
 						}
 					}
 				}
+				// Hazards and the goal.
+				bool died = false;
+				for (const Entity &o : ents) {
+					if (!o.visible || (!o.hazard && !o.goal) || &o == &p) {
+						continue;
+					}
+					float ox, oy, orot;
+					entity_animated_transform(o, t, true, ox, oy, orot);
+					if (pb.overlaps(entity_box(o, Vec3(ox, oy, 0)))) {
+						if (o.hazard) {
+							died = true;
+							break;
+						}
+						status2d.goal_time = t;
+						status2d.level_time = t;
+					}
+				}
+				if (died) {
+					status2d.deaths++;
+					status2d.death_flash = t;
+					for (size_t i = 0; i < ents.size(); i++) {
+						if (ents[i].player || ents[i].chase_speed != 0.0f) {
+							ents[i].x = initial2d[i].x;
+							ents[i].y = initial2d[i].y;
+						}
+					}
+					break;
+				}
 			}
 
 			// Camera: centered on the first entity with camera_follow, or on the world origin.
@@ -503,6 +669,7 @@ int run_game(const std::string &p_project_dir) {
 			}
 			draw_scene(ImGui::GetBackgroundDrawList(), scene, origin, 1.0f, font, t, true);
 			draw_hud(font, score2d, total2d, all2d_time, t, w);
+			draw_status(font, status2d, t, w, h);
 			ImGui::Render();
 			renderer.resize(w, h);
 			renderer.clear(scene.background);

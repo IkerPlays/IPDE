@@ -10,6 +10,7 @@
 #include <imgui_internal.h>
 
 #include <algorithm>
+#include <cstdio>
 
 #include <string>
 #include <vector>
@@ -104,6 +105,18 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 int main(int argc, char **argv) {
 	const std::vector<std::string> args = get_args(argc, argv);
 #endif
+	// "--new <folder> [2d|3d]": create a project with the example scene and exit.
+	for (size_t i = 0; i + 1 < args.size(); i++) {
+		if (args[i] == "--new") {
+			std::string err;
+			const bool is3d = !(i + 2 < args.size() && args[i + 2] == "2d");
+			if (!Project::create(args[i + 1], fs::get_file_name(args[i + 1]), is3d, err)) {
+				fprintf(stderr, "%s\n", err.c_str());
+				return 1;
+			}
+			return 0;
+		}
+	}
 	// "--run <project folder>": play a project (used by the editor's Run button).
 	for (size_t i = 0; i + 1 < args.size(); i++) {
 		if (args[i] == "--run") {

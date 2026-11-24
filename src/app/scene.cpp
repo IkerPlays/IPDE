@@ -141,6 +141,17 @@ Json Scene::to_json() const {
 		je["camera_follow"] = e.camera_follow;
 		je["collectible"] = e.collectible;
 		je["solid"] = e.solid;
+		if (e.has_motion()) {
+			je["move_x"] = (double)e.move_x;
+			je["move_y"] = (double)e.move_y;
+			je["move_z"] = (double)e.move_z;
+			je["move_time"] = (double)e.move_time;
+		}
+		je["hazard"] = e.hazard;
+		je["goal"] = e.goal;
+		je["bounce"] = (double)e.bounce;
+		je["chase_speed"] = (double)e.chase_speed;
+		je["chase_range"] = (double)e.chase_range;
 		list.push_back(je);
 	}
 	j["entities"] = list;
@@ -212,6 +223,15 @@ Scene Scene::from_json(const Json &p_json) {
 		en.camera_follow = je["camera_follow"].as_bool(false);
 		en.collectible = je["collectible"].as_bool(false);
 		en.solid = je["solid"].as_bool(true);
+		en.move_x = (float)je["move_x"].as_number(0);
+		en.move_y = (float)je["move_y"].as_number(0);
+		en.move_z = (float)je["move_z"].as_number(0);
+		en.move_time = (float)je["move_time"].as_number(2.0);
+		en.hazard = je["hazard"].as_bool(false);
+		en.goal = je["goal"].as_bool(false);
+		en.bounce = (float)je["bounce"].as_number(0);
+		en.chase_speed = (float)je["chase_speed"].as_number(0);
+		en.chase_range = (float)je["chase_range"].as_number(entity_type_is_3d(en.type) ? 8.0 : 300.0);
 		s.entities.push_back(en);
 	}
 	return s;
@@ -305,6 +325,41 @@ static Scene example_scene_2d(const std::string &p_name) {
 		s.entities.push_back(coin);
 	}
 
+	Entity wall;
+	wall.name = "Muro móvil";
+	wall.x = 0;
+	wall.y = -40;
+	wall.width = 40;
+	wall.height = 120;
+	wall.color = 0xFF8C9BFF;
+	wall.move_y = 160;
+	wall.move_time = 1.5f;
+	s.entities.push_back(wall);
+
+	Entity enemy;
+	enemy.name = "Enemigo";
+	enemy.type = EntityType::CIRCLE;
+	enemy.x = 300;
+	enemy.y = -80;
+	enemy.width = 44;
+	enemy.color = 0xFFFF4D5E;
+	enemy.chase_speed = 90;
+	enemy.chase_range = 260;
+	enemy.hazard = true;
+	enemy.solid = false;
+	s.entities.push_back(enemy);
+
+	Entity goal;
+	goal.name = "Meta";
+	goal.x = 400;
+	goal.y = 160;
+	goal.width = 50;
+	goal.height = 80;
+	goal.color = 0xFF3DDC84;
+	goal.goal = true;
+	goal.solid = false;
+	s.entities.push_back(goal);
+
 	Entity title;
 	title.name = "Título";
 	title.type = EntityType::TEXT;
@@ -379,13 +434,41 @@ static Scene example_scene_3d() {
 	top_coin.solid = false;
 	s.entities.push_back(top_coin);
 
-	Entity orb = make3d("Orbe", EntityType::SPHERE, -7, 1.5f, -7, 1.5f, 1.5f, 1.5f, 0xFF8B3DFF);
+	// A moving platform that lifts the player to a tower with the goal on top.
+	Entity tower = make3d("Torre", EntityType::CUBE, -8, 2, -8.5f, 3, 4, 3, 0xFF7C6CF0);
+	s.entities.push_back(tower);
+	Entity lift = make3d("Plataforma móvil", EntityType::CUBE, -8, 0.2f, -5.0f, 3, 0.4f, 3, 0xFFE8E8F0);
+	lift.move_y = 3.8f;
+	lift.move_time = 2.5f;
+	lift.roughness = 0.4f;
+	s.entities.push_back(lift);
+	Entity goal = make3d("Meta", EntityType::CYLINDER, -8, 5.0f, -8.5f, 0.9f, 2.0f, 0.9f, 0xFF3DDC84);
+	goal.emission = 0.8f;
+	goal.spin_speed = 60;
+	goal.goal = true;
+	goal.solid = false;
+	s.entities.push_back(goal);
+
+	Entity pad = make3d("Trampolín", EntityType::CYLINDER, -9, 0.1f, 6, 2.2f, 0.2f, 2.2f, 0xFFFF8A3D);
+	pad.bounce = 13.0f;
+	pad.emission = 0.4f;
+	s.entities.push_back(pad);
+
+	Entity enemy = make3d("Enemigo", EntityType::SPHERE, 9, 0.6f, 6, 1.2f, 1.2f, 1.2f, 0xFFFF4D5E);
+	enemy.chase_speed = 2.6f;
+	enemy.chase_range = 6.0f;
+	enemy.hazard = true;
+	enemy.solid = false;
+	enemy.roughness = 0.3f;
+	s.entities.push_back(enemy);
+
+	Entity orb = make3d("Orbe", EntityType::SPHERE, 10, 1.5f, -2, 1.5f, 1.5f, 1.5f, 0xFF8B3DFF);
 	orb.emission = 1.5f;
 	orb.bob_amplitude = 0.4f;
 	orb.solid = false;
 	s.entities.push_back(orb);
 
-	Entity light = make3d("Luz", EntityType::LIGHT, -7, 2.5f, -7, 0.3f, 0.3f, 0.3f, 0xFFB07CFF);
+	Entity light = make3d("Luz", EntityType::LIGHT, 10, 2.5f, -2, 0.3f, 0.3f, 0.3f, 0xFFB07CFF);
 	light.light_energy = 3.0f;
 	light.light_range = 9.0f;
 	light.solid = false;

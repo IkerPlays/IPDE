@@ -349,6 +349,12 @@ static void draw_scene_panel(App &p_app, float p_width) {
 			prefix = "[J] ";
 		} else if (e.collectible) {
 			prefix = "[+] ";
+		} else if (e.goal) {
+			prefix = "[M] ";
+		} else if (e.chase_speed != 0.0f) {
+			prefix = "[E] ";
+		} else if (e.hazard) {
+			prefix = "[!] ";
 		}
 		const std::string label = prefix + e.name + "##e";
 		if (!e.visible) {
@@ -451,6 +457,24 @@ static void draw_viewport_3d(App &p_app, float p_width) {
 			g_r3d.draw_line(p, p + Vec3(1.2f, 0, 0), 0xFFFF5A5A, false);
 			g_r3d.draw_line(p, p + Vec3(0, 1.2f, 0), 0xFF5AFF8C, false);
 			g_r3d.draw_line(p, p + Vec3(0, 0, 1.2f), 0xFF5A8CFF, false);
+			if (e.has_motion()) { // Path of a moving platform and its end position.
+				const Vec3 end = p + Vec3(e.move_x, e.move_y, e.move_z);
+				g_r3d.draw_line(p, end, 0xFFFFC53D, false);
+				const Mat4 me = Mat4::translate(Vec3(e.move_x, e.move_y, e.move_z)) * SceneRenderer3D::entity_transform(e, 0.0, false);
+				Vec3 ce[8];
+				for (int i = 0; i < 8; i++) {
+					ce[i] = me.transform_point(Vec3(i & 1 ? mxv.x : mn.x, i & 2 ? mxv.y : mn.y, i & 4 ? mxv.z : mn.z));
+				}
+				for (const auto &ed : edges) {
+					g_r3d.draw_line(ce[ed[0]], ce[ed[1]], 0x90FFC53D, true);
+				}
+			}
+			if (e.chase_speed != 0.0f) { // Enemy vision range.
+				for (int i = 0; i < 48; i++) {
+					const float a0 = i / 48.0f * 2 * PI, a1 = (i + 1) / 48.0f * 2 * PI;
+					g_r3d.draw_line(p + Vec3(std::cos(a0), 0, std::sin(a0)) * e.chase_range, p + Vec3(std::cos(a1), 0, std::sin(a1)) * e.chase_range, 0x80FF4D5E);
+				}
+			}
 			if (e.type == EntityType::LIGHT) {
 				for (int i = 0; i < 48; i++) {
 					const float a0 = i / 48.0f * 2 * PI, a1 = (i + 1) / 48.0f * 2 * PI;
@@ -742,6 +766,60 @@ static void draw_inspector(App &p_app) {
 		}
 		checkbox("Sólido", &e.solid);
 		checkbox("Coleccionable", &e.collectible);
+		checkbox("Peligroso (reinicia al jugador)", &e.hazard);
+		checkbox("Meta (completa el nivel)", &e.goal);
+		if (is3d) {
+			drag_float("Trampolín", &e.bounce, 0.1f, 0, 100, e.bounce > 0 ? "%.1f m/s" : "No");
+		}
+		{
+			bool moving = e.has_motion();
+			if (ImGui::Checkbox("Plataforma móvil", &moving)) {
+				if (moving) {
+					if (is3d) {
+						e.move_y = 3.0f;
+					} else {
+						e.move_x = 200.0f;
+					}
+				} else {
+					e.move_x = e.move_y = e.move_z = 0.0f;
+				}
+				g_ed.dirty = true;
+			}
+			if (moving) {
+				if (is3d) {
+					float m[3] = { e.move_x, e.move_y, e.move_z };
+					if (ImGui::DragFloat3("Recorrido", m, 0.05f, 0, 0, "%.2f")) {
+						e.move_x = m[0];
+						e.move_y = m[1];
+						e.move_z = m[2];
+						g_ed.dirty = true;
+					}
+				} else {
+					float m[2] = { e.move_x, e.move_y };
+					if (ImGui::DragFloat2("Recorrido", m, 1.0f, 0, 0, "%.0f")) {
+						e.move_x = m[0];
+						e.move_y = m[1];
+						g_ed.dirty = true;
+					}
+				}
+				drag_float("Duración", &e.move_time, 0.02f, 0.1f, 120, "%.2f s");
+			}
+		}
+		{
+			bool enemy = e.chase_speed != 0.0f;
+			if (ImGui::Checkbox("Enemigo (persigue al jugador)", &enemy)) {
+				e.chase_speed = enemy ? (is3d ? 2.5f : 120.0f) : 0.0f;
+				if (enemy) {
+					e.hazard = true;
+					e.chase_range = is3d ? 8.0f : 300.0f;
+				}
+				g_ed.dirty = true;
+			}
+			if (enemy) {
+				drag_float("Velocidad enemigo", &e.chase_speed, is3d ? 0.05f : 1.0f, 0.01f, 5000, is3d ? "%.1f m/s" : "%.0f px/s");
+				drag_float("Distancia de visión", &e.chase_range, is3d ? 0.1f : 2.0f, 0, 100000, is3d ? "%.1f m" : "%.0f px");
+			}
+		}
 		checkbox("Controlado por el jugador", &e.player);
 		if (e.player) {
 			drag_float("Velocidad", &e.player_speed, is3d ? 0.05f : 1.0f, 0, 5000, is3d ? "%.1f m/s" : "%.0f px/s");

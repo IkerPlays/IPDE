@@ -20,6 +20,8 @@ public:
 	static Environment3D make_environment(const Scene &p_scene);
 	static std::vector<PointLight3D> make_lights(const Scene &p_scene, double p_time, bool p_animate);
 	static Mat4 entity_transform(const Entity &p_e, double p_time, bool p_animate);
+	// 0..1 position along a moving platform's path (smooth back and forth).
+	static float motion_factor(const Entity &p_e, double p_time);
 	static Vec3 entity_position(const Entity &p_e, double p_time, bool p_animate);
 
 	std::shared_ptr<Mesh> get_mesh(const Entity &p_e, const std::string &p_project_dir);
