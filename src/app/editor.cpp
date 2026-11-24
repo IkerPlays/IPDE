@@ -373,6 +373,177 @@ static void add_entity(EntityType p_type) {
 	g_ed.dirty = true;
 }
 
+// Ready-made game objects for the "Add" menu.
+enum class Preset { COIN, ENEMY, MOVING_PLATFORM, JUMP_PAD, GOAL, SPIKES, CHECKPOINT, SWITCH, DOOR, PLAYER, COUNT };
+
+static const char *preset_name(Preset p_preset) {
+	switch (p_preset) {
+		case Preset::COIN: return "Moneda";
+		case Preset::ENEMY: return "Enemigo";
+		case Preset::MOVING_PLATFORM: return "Plataforma móvil";
+		case Preset::JUMP_PAD: return "Trampolín";
+		case Preset::GOAL: return "Meta";
+		case Preset::SPIKES: return "Pinchos";
+		case Preset::CHECKPOINT: return "Punto de control";
+		case Preset::SWITCH: return "Interruptor";
+		case Preset::DOOR: return "Puerta";
+		case Preset::PLAYER: return "Jugador";
+		default: return "";
+	}
+}
+
+static void add_preset(Preset p_preset) {
+	const bool is3d = g_ed.scene.is_3d;
+	Entity e;
+	e.name = preset_name(p_preset);
+	if (is3d) {
+		e.x = g_ed.target.x;
+		e.z = g_ed.target.z;
+		e.player_speed = 5.0f;
+		e.chase_range = 8.0f;
+	} else {
+		e.x = g_ed.pan.x;
+		e.y = g_ed.pan.y;
+		e.chase_range = 300.0f;
+	}
+	auto set3d = [&](EntityType t, float w, float h, float d, float y) {
+		e.type = t;
+		e.width = w;
+		e.height = h;
+		e.depth = d;
+		e.y = y;
+	};
+	auto set2d = [&](EntityType t, float w, float h) {
+		e.type = t;
+		e.width = w;
+		e.height = h;
+	};
+	switch (p_preset) {
+		case Preset::COIN:
+			if (is3d) {
+				set3d(EntityType::TORUS, 0.8f, 0.8f, 0.8f, 1.0f);
+				e.rot_x = 90;
+				e.metallic = 1.0f;
+				e.roughness = 0.25f;
+				e.bob_amplitude = 0.2f;
+			} else {
+				set2d(EntityType::RECT, 36, 36);
+				e.rotation = 45;
+				e.bob_amplitude = 10;
+			}
+			e.color = 0xFFFFC53D;
+			e.spin_speed = 90;
+			e.bob_frequency = 0.6f;
+			e.collectible = true;
+			e.solid = false;
+			break;
+		case Preset::ENEMY:
+			if (is3d) {
+				set3d(EntityType::SPHERE, 1.2f, 1.2f, 1.2f, 0.6f);
+				e.chase_speed = 2.6f;
+			} else {
+				set2d(EntityType::CIRCLE, 44, 44);
+				e.chase_speed = 100.0f;
+			}
+			e.color = 0xFFFF4D5E;
+			e.hazard = true;
+			e.solid = false;
+			break;
+		case Preset::MOVING_PLATFORM:
+			if (is3d) {
+				set3d(EntityType::CUBE, 3, 0.4f, 3, 0.2f);
+				e.move_y = 3.0f;
+			} else {
+				set2d(EntityType::RECT, 160, 24);
+				e.move_x = 200.0f;
+			}
+			e.color = 0xFFE8E8F0;
+			e.move_time = 2.5f;
+			break;
+		case Preset::JUMP_PAD:
+			if (is3d) {
+				set3d(EntityType::CYLINDER, 2.2f, 0.2f, 2.2f, 0.1f);
+			} else {
+				set2d(EntityType::RECT, 80, 16);
+			}
+			e.color = 0xFFFF8A3D;
+			e.bounce = 13.0f;
+			e.emission = 0.4f;
+			break;
+		case Preset::GOAL:
+			if (is3d) {
+				set3d(EntityType::CYLINDER, 0.9f, 2.0f, 0.9f, 1.0f);
+				e.emission = 0.8f;
+				e.spin_speed = 60;
+			} else {
+				set2d(EntityType::RECT, 50, 80);
+			}
+			e.color = 0xFF3DDC84;
+			e.goal = true;
+			e.solid = false;
+			break;
+		case Preset::SPIKES:
+			if (is3d) {
+				set3d(EntityType::CONE, 1.0f, 0.8f, 1.0f, 0.4f);
+				e.metallic = 0.6f;
+				e.roughness = 0.3f;
+			} else {
+				set2d(EntityType::RECT, 80, 20);
+			}
+			e.color = 0xFFB8BCD0;
+			e.hazard = true;
+			e.solid = false;
+			break;
+		case Preset::CHECKPOINT:
+			if (is3d) {
+				set3d(EntityType::CYLINDER, 1.6f, 0.15f, 1.6f, 0.075f);
+			} else {
+				set2d(EntityType::RECT, 30, 70);
+			}
+			e.color = 0xFF5AC8FF;
+			e.checkpoint = true;
+			e.solid = false;
+			break;
+		case Preset::SWITCH:
+			if (is3d) {
+				set3d(EntityType::CYLINDER, 1.2f, 0.2f, 1.2f, 0.1f);
+			} else {
+				set2d(EntityType::RECT, 50, 14);
+			}
+			e.color = 0xFFFFC53D;
+			e.solid = false;
+			break;
+		case Preset::DOOR:
+			if (is3d) {
+				set3d(EntityType::CUBE, 3, 3, 0.4f, 1.5f);
+				e.pattern = 2;
+				e.pattern_scale = 0.5f;
+			} else {
+				set2d(EntityType::RECT, 30, 120);
+			}
+			e.color = 0xFFB0705A;
+			e.door = true;
+			break;
+		case Preset::PLAYER:
+			if (is3d) {
+				set3d(EntityType::CAPSULE, 1, 2, 1, 1.0f);
+				e.roughness = 0.35f;
+			} else {
+				set2d(EntityType::RECT, 64, 64);
+				e.player_speed = 300.0f;
+			}
+			e.color = 0xFF6C7BFF;
+			e.player = true;
+			e.camera_follow = is3d;
+			break;
+		default:
+			break;
+	}
+	g_ed.scene.entities.push_back(e);
+	g_ed.selected = (int)g_ed.scene.entities.size() - 1;
+	g_ed.dirty = true;
+}
+
 static void delete_selected() {
 	if (g_ed.selected >= 0 && g_ed.selected < (int)g_ed.scene.entities.size()) {
 		g_ed.scene.entities.erase(g_ed.scene.entities.begin() + g_ed.selected);
@@ -542,6 +713,15 @@ static void draw_scene_panel(App &p_app, float p_width) {
 					add_entity(t);
 				}
 			}
+		}
+		ImGui::Separator();
+		if (ImGui::BeginMenu("Objetos de juego")) {
+			for (int i = 0; i < (int)Preset::COUNT; i++) {
+				if (ImGui::MenuItem(preset_name((Preset)i))) {
+					add_preset((Preset)i);
+				}
+			}
+			ImGui::EndMenu();
 		}
 		ImGui::EndPopup();
 	}
