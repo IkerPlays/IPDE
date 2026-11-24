@@ -141,6 +141,9 @@ private:
 	int height = 0;
 	std::vector<uint32_t> color;
 	std::vector<float> depth;
+	// Visibility buffer: which triangle covers each pixel and where (shaded once afterwards).
+	std::vector<uint32_t> vis_tri;
+	std::vector<float> vis_l0, vis_l1;
 	std::vector<uint32_t> ids;
 
 	Camera3D camera;
@@ -164,7 +167,8 @@ private:
 
 	void _clip_and_queue(const ShadeVertex *p_verts, const Material3D *p_material, uint32_t p_id);
 	void _rasterize_band(int p_y0, int p_y1);
-	void _rasterize_triangle(const Triangle &p_tri, int p_y0, int p_y1);
+	void _rasterize_triangle(const Triangle &p_tri, uint32_t p_index, int p_y0, int p_y1);
+	void _shade_band(int p_y0, int p_y1);
 	Vec3 _shade(const Material3D &p_mat, const Vec3 &p_world, Vec3 p_normal, const Vec2 &p_uv, bool p_front) const;
 	void _draw_sky();
 	void _build_shadow_map();

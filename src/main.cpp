@@ -107,6 +107,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 int main(int argc, char **argv) {
 	const std::vector<std::string> args = get_args(argc, argv);
 #endif
+	// "--bench <project folder>": renders the first 3D level offscreen and prints the time per frame.
+	for (size_t i = 0; i + 1 < args.size(); i++) {
+		if (args[i] == "--bench") {
+			return bench_3d(args[i + 1]);
+		}
+	}
 	// "--new <folder> [2d|3d]": create a project with the example scene and exit.
 	for (size_t i = 0; i + 1 < args.size(); i++) {
 		if (args[i] == "--new") {

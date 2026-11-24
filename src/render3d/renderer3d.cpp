@@ -1,6 +1,10 @@
 #include "render3d/renderer3d.h"
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
 #include <cmath>
 #include <cstring>
 #include <thread>
@@ -76,6 +80,9 @@ void Renderer3D::resize(int p_width, int p_height) {
 	color.assign((size_t)width * height, 0xFF000000u);
 	depth.assign((size_t)width * height, 1.0f);
 	ids.assign((size_t)width * height, 0);
+	vis_tri.assign((size_t)width * height, UINT32_MAX);
+	vis_l0.assign((size_t)width * height, 0.0f);
+	vis_l1.assign((size_t)width * height, 0.0f);
 }
 
 void Renderer3D::begin(const Camera3D &p_camera, const Environment3D &p_env, const std::vector<PointLight3D> &p_lights) {
@@ -296,6 +303,13 @@ void Renderer3D::_build_shadow_map() {
 
 	const int S = shadow_size;
 	shadow_map.assign((size_t)S * S, 1.0f);
+	// Transform every caster triangle once, then rasterize horizontal bands in parallel.
+	struct ShadowTri {
+		Vec3 a, b, d;
+		float inv_area;
+		int x0, x1, y0, y1;
+	};
+	std::vector<ShadowTri> tris;
 	for (const ShadowCaster &c : shadow_casters) {
 		const Mat4 mvp = shadow_view_proj * c.model;
 		std::vector<Vec3> sp(c.mesh->positions.size());
@@ -305,34 +319,64 @@ void Renderer3D::_build_shadow_map() {
 			sp[i] = Vec3((cl.x * 0.5f + 0.5f) * S, (1.0f - (cl.y * 0.5f + 0.5f)) * S, cl.z * 0.5f + 0.5f);
 		}
 		for (size_t i = 0; i + 2 < c.mesh->indices.size(); i += 3) {
-			const Vec3 &a = sp[c.mesh->indices[i]];
-			const Vec3 &b = sp[c.mesh->indices[i + 1]];
-			const Vec3 &d = sp[c.mesh->indices[i + 2]];
-			const float area = (b.x - a.x) * (d.y - a.y) - (b.y - a.y) * (d.x - a.x);
+			ShadowTri t;
+			t.a = sp[c.mesh->indices[i]];
+			t.b = sp[c.mesh->indices[i + 1]];
+			t.d = sp[c.mesh->indices[i + 2]];
+			const float area = (t.b.x - t.a.x) * (t.d.y - t.a.y) - (t.b.y - t.a.y) * (t.d.x - t.a.x);
 			if (std::fabs(area) < 1e-9f) {
 				continue;
 			}
-			const int x0 = std::max(0, (int)std::floor(std::min({ a.x, b.x, d.x })));
-			const int x1 = std::min(S - 1, (int)std::ceil(std::max({ a.x, b.x, d.x })));
-			const int y0 = std::max(0, (int)std::floor(std::min({ a.y, b.y, d.y })));
-			const int y1 = std::min(S - 1, (int)std::ceil(std::max({ a.y, b.y, d.y })));
-			const float inv_area = 1.0f / area;
+			t.inv_area = 1.0f / area;
+			t.x0 = std::max(0, (int)std::floor(std::min({ t.a.x, t.b.x, t.d.x })));
+			t.x1 = std::min(S - 1, (int)std::ceil(std::max({ t.a.x, t.b.x, t.d.x })));
+			t.y0 = std::max(0, (int)std::floor(std::min({ t.a.y, t.b.y, t.d.y })));
+			t.y1 = std::min(S - 1, (int)std::ceil(std::max({ t.a.y, t.b.y, t.d.y })));
+			if (t.x0 <= t.x1 && t.y0 <= t.y1) {
+				tris.push_back(t);
+			}
+		}
+	}
+	auto raster = [&](int p_y0, int p_y1) {
+		for (const ShadowTri &t : tris) {
+			const int y0 = std::max(t.y0, p_y0), y1 = std::min(t.y1, p_y1 - 1);
+			const Vec3 &a = t.a, &b = t.b, &d = t.d;
+			// Barycentric weights are linear in x: step them instead of recomputing.
+			const float dw0 = -(b.y - d.y) * t.inv_area * -1.0f;
+			const float dw1 = -(d.y - a.y) * t.inv_area * -1.0f;
 			for (int y = y0; y <= y1; y++) {
-				for (int x = x0; x <= x1; x++) {
-					const float px = x + 0.5f, py = y + 0.5f;
-					float w0 = ((b.x - px) * (d.y - py) - (b.y - py) * (d.x - px)) * inv_area;
-					float w1 = ((d.x - px) * (a.y - py) - (d.y - py) * (a.x - px)) * inv_area;
-					float w2 = 1.0f - w0 - w1;
+				const float py = y + 0.5f;
+				const float px = t.x0 + 0.5f;
+				float w0 = ((b.x - px) * (d.y - py) - (b.y - py) * (d.x - px)) * t.inv_area;
+				float w1 = ((d.x - px) * (a.y - py) - (d.y - py) * (a.x - px)) * t.inv_area;
+				float *row = shadow_map.data() + (size_t)y * S;
+				for (int x = t.x0; x <= t.x1; x++, w0 += dw0, w1 += dw1) {
+					const float w2 = 1.0f - w0 - w1;
 					if (w0 < 0 || w1 < 0 || w2 < 0) {
 						continue;
 					}
 					const float z = a.z * w0 + b.z * w1 + d.z * w2;
-					float &dst = shadow_map[(size_t)y * S + x];
-					if (z < dst) {
-						dst = z;
+					if (z < row[x]) {
+						row[x] = z;
 					}
 				}
 			}
+		}
+	};
+	const unsigned threads = std::max(1u, std::min(16u, std::thread::hardware_concurrency()));
+	if (threads == 1 || tris.size() < 32) {
+		raster(0, S);
+	} else {
+		std::vector<std::thread> pool;
+		const int band = (S + (int)threads - 1) / (int)threads;
+		for (unsigned i = 0; i < threads; i++) {
+			const int y0 = (int)i * band, y1 = std::min(S, y0 + band);
+			if (y0 < y1) {
+				pool.emplace_back([&raster, y0, y1]() { raster(y0, y1); });
+			}
+		}
+		for (std::thread &th : pool) {
+			th.join();
 		}
 	}
 	shadow_valid = true;
@@ -359,6 +403,14 @@ float Renderer3D::_shadow_factor(const Vec3 &p_world, const Vec3 &p_normal) cons
 	const float a = lit(ix, iy) * (1 - fx) + lit(ix + 1, iy) * fx;
 	const float b = lit(ix, iy + 1) * (1 - fx) + lit(ix + 1, iy + 1) * fx;
 	return a * (1 - fy) + b * fy;
+}
+
+// Fast replacement for pow(x, n) in specular highlights (Schlick's approximation).
+static inline float spec_pow(float p_x, float p_n) {
+	if (p_x <= 0.0f) {
+		return 0.0f;
+	}
+	return p_x / (p_n - p_n * p_x + p_x);
 }
 
 static float hash2(int p_x, int p_y) {
@@ -461,7 +513,7 @@ Vec3 Renderer3D::_shade(const Material3D &p_mat, const Vec3 &p_world, Vec3 p_nor
 		const float shadow = _shadow_factor(p_world, n);
 		if (shadow > 0) {
 			const Vec3 h = (sun_dir_to_light + v).normalized();
-			const float spec = std::pow(std::max(0.0f, dot(n, h)), shininess) * spec_strength * (shininess + 8.0f) / 32.0f;
+			const float spec = spec_pow(dot(n, h), shininess) * spec_strength * (shininess + 8.0f) / 32.0f;
 			result += (albedo * (ndl * diffuse_weight) + spec_color * (spec * ndl)) * env.sun_color * (env.sun_energy * shadow);
 		}
 	}
@@ -482,7 +534,7 @@ Vec3 Renderer3D::_shade(const Material3D &p_mat, const Vec3 &p_world, Vec3 p_nor
 		float att = 1.0f - d / l.range;
 		att = att * att;
 		const Vec3 h = (to_light + v).normalized();
-		const float spec = std::pow(std::max(0.0f, dot(n, h)), shininess) * spec_strength * (shininess + 8.0f) / 32.0f;
+		const float spec = spec_pow(dot(n, h), shininess) * spec_strength * (shininess + 8.0f) / 32.0f;
 		result += (albedo * (ndl_p * diffuse_weight) + spec_color * (spec * ndl_p)) * l.color * (l.energy * att);
 	}
 
@@ -490,7 +542,7 @@ Vec3 Renderer3D::_shade(const Material3D &p_mat, const Vec3 &p_world, Vec3 p_nor
 	return result;
 }
 
-void Renderer3D::_rasterize_triangle(const Triangle &p_tri, int p_y0, int p_y1) {
+void Renderer3D::_rasterize_triangle(const Triangle &p_tri, uint32_t p_index, int p_y0, int p_y1) {
 	const ScreenVertex &a = p_tri.v[0];
 	const ScreenVertex &b = p_tri.v[1];
 	const ScreenVertex &c = p_tri.v[2];
@@ -505,7 +557,7 @@ void Renderer3D::_rasterize_triangle(const Triangle &p_tri, int p_y0, int p_y1) 
 		return;
 	}
 	// Exact edge functions in fixed point (1/16 pixel) with the top-left rule: shared edges
-	// between triangles never leave cracks or get drawn twice.
+	// between triangles never leave cracks or get drawn twice. Evaluated incrementally.
 	const int64_t ax = (int64_t)std::lround(a.x * 16.0f), ay = (int64_t)std::lround(a.y * 16.0f);
 	const int64_t bx = (int64_t)std::lround(b.x * 16.0f), by = (int64_t)std::lround(b.y * 16.0f);
 	const int64_t cx = (int64_t)std::lround(c.x * 16.0f), cy = (int64_t)std::lround(c.y * 16.0f);
@@ -525,36 +577,75 @@ void Renderer3D::_rasterize_triangle(const Triangle &p_tri, int p_y0, int p_y1) 
 	const int64_t bias0 = top_left(bx, by, cx, cy) ? 0 : -1;
 	const int64_t bias1 = top_left(cx, cy, ax, ay) ? 0 : -1;
 	const int64_t bias2 = top_left(ax, ay, bx, by) ? 0 : -1;
-	const Material3D &mat = *p_tri.material;
-	const float fog_range = std::max(0.001f, env.fog_end - env.fog_start);
-	const Vec3 fog_color = env.sky_horizon;
+	// Change of each edge function per pixel step in x (16 fixed-point units).
+	const int64_t step0 = -(cy - by) * 16 * sign;
+	const int64_t step1 = -(ay - cy) * 16 * sign;
+	const int64_t step2 = -(by - ay) * 16 * sign;
+	const float dz0 = a.z, dz1 = b.z, dz2 = c.z;
 
 	for (int y = y_start; y < y_end; y++) {
 		const int64_t pyf = (int64_t)y * 16 + 8;
-		float *drow = depth.data() + (size_t)y * width;
-		uint32_t *crow = color.data() + (size_t)y * width;
-		uint32_t *irow = ids.data() + (size_t)y * width;
-		for (int x = x_start; x < x_end; x++) {
-			const int64_t pxf = (int64_t)x * 16 + 8;
-			const int64_t e0 = edge(bx, by, cx, cy, pxf, pyf) * sign;
-			const int64_t e1 = edge(cx, cy, ax, ay, pxf, pyf) * sign;
-			const int64_t e2 = edge(ax, ay, bx, by, pxf, pyf) * sign;
-			if (e0 + bias0 < 0 || e1 + bias1 < 0 || e2 + bias2 < 0) {
+		const int64_t px0 = (int64_t)x_start * 16 + 8;
+		int64_t e0 = edge(bx, by, cx, cy, px0, pyf) * sign;
+		int64_t e1 = edge(cx, cy, ax, ay, px0, pyf) * sign;
+		int64_t e2 = edge(ax, ay, bx, by, px0, pyf) * sign;
+		const size_t row = (size_t)y * width;
+		float *drow = depth.data() + row;
+		for (int x = x_start; x < x_end; x++, e0 += step0, e1 += step1, e2 += step2) {
+			if ((e0 + bias0) < 0 || (e1 + bias1) < 0 || (e2 + bias2) < 0) {
 				continue;
 			}
 			const float l0 = (float)e0 * inv_area;
 			const float l1 = (float)e1 * inv_area;
 			const float l2 = (float)e2 * inv_area;
-			const float z = a.z * l0 + b.z * l1 + c.z * l2;
+			const float z = dz0 * l0 + dz1 * l1 + dz2 * l2;
 			if (z >= drow[x] || z < 0.0f) {
 				continue;
 			}
+			drow[x] = z;
+			vis_tri[row + x] = p_index;
+			vis_l0[row + x] = l0;
+			vis_l1[row + x] = l1;
+		}
+	}
+}
+
+void Renderer3D::_rasterize_band(int p_y0, int p_y1) {
+	const size_t first = (size_t)p_y0 * width, last = (size_t)p_y1 * width;
+	std::fill(vis_tri.begin() + first, vis_tri.begin() + last, UINT32_MAX);
+	for (size_t i = 0; i < triangles.size(); i++) {
+		const Triangle &t = triangles[i];
+		if (t.max_y <= p_y0 || t.min_y >= p_y1) {
+			continue;
+		}
+		_rasterize_triangle(t, (uint32_t)i, p_y0, p_y1);
+	}
+	_shade_band(p_y0, p_y1);
+}
+
+// Shades every visible pixel once (no work is wasted on hidden surfaces).
+void Renderer3D::_shade_band(int p_y0, int p_y1) {
+	const float fog_range = std::max(0.001f, env.fog_end - env.fog_start);
+	const Vec3 fog_color = env.sky_horizon;
+	for (int y = p_y0; y < p_y1; y++) {
+		const size_t row = (size_t)y * width;
+		for (int x = 0; x < width; x++) {
+			const size_t idx = row + x;
+			const uint32_t ti = vis_tri[idx];
+			if (ti == UINT32_MAX) {
+				continue;
+			}
+			const Triangle &tri = triangles[ti];
+			const ScreenVertex &a = tri.v[0];
+			const ScreenVertex &b = tri.v[1];
+			const ScreenVertex &c = tri.v[2];
+			const float l0 = vis_l0[idx], l1 = vis_l1[idx], l2 = 1.0f - l0 - l1;
 			const float iw = a.inv_w * l0 + b.inv_w * l1 + c.inv_w * l2;
 			const float w = 1.0f / iw;
 			const Vec3 world = (a.world_w * l0 + b.world_w * l1 + c.world_w * l2) * w;
 			const Vec3 normal = (a.normal_w * l0 + b.normal_w * l1 + c.normal_w * l2) * w;
 			const Vec2 uv{ (a.uv_w.x * l0 + b.uv_w.x * l1 + c.uv_w.x * l2) * w, (a.uv_w.y * l0 + b.uv_w.y * l1 + c.uv_w.y * l2) * w };
-			Vec3 col = _shade(mat, world, normal, uv, p_tri.front);
+			Vec3 col = _shade(*tri.material, world, normal, uv, tri.front);
 			col = tonemap(col * env.exposure);
 			if (env.fog) {
 				const float dist = (world - camera.position).length();
@@ -563,19 +654,9 @@ void Renderer3D::_rasterize_triangle(const Triangle &p_tri, int p_y0, int p_y1) 
 					col = lerp(col, fog_color, f * f);
 				}
 			}
-			drow[x] = z;
-			crow[x] = linear_to_argb(col);
-			irow[x] = p_tri.object_id;
+			color[idx] = linear_to_argb(col);
+			ids[idx] = tri.object_id;
 		}
-	}
-}
-
-void Renderer3D::_rasterize_band(int p_y0, int p_y1) {
-	for (const Triangle &t : triangles) {
-		if (t.max_y <= p_y0 || t.min_y >= p_y1) {
-			continue;
-		}
-		_rasterize_triangle(t, p_y0, p_y1);
 	}
 }
 
@@ -676,12 +757,21 @@ void Renderer3D::_draw_lines() {
 }
 
 void Renderer3D::end() {
+	auto T = [] { return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count(); };
+	double t0 = T();
 	_draw_sky();
+	double t1 = T();
 	std::fill(depth.begin(), depth.end(), 1.0f);
 	std::fill(ids.begin(), ids.end(), 0u);
 	_build_shadow_map();
+	double t2 = T();
+	// IPDE_PROFILE=1 prints the time of each stage every 10 frames.
+	static int frame = 0;
+	static const bool profile = getenv("IPDE_PROFILE") != nullptr;
+	const bool prof = profile && (frame++ % 10) == 0;
 
-	// Rasterize in horizontal bands, one per thread.
+	// Rasterize and shade in small horizontal bands; threads take the next free band, so busy
+	// areas (many objects) don't leave the other threads waiting.
 	unsigned threads = std::max(1u, std::min(16u, std::thread::hardware_concurrency()));
 	if (triangles.size() < 64 || height < 64) {
 		threads = 1;
@@ -689,22 +779,30 @@ void Renderer3D::end() {
 	if (threads == 1) {
 		_rasterize_band(0, height);
 	} else {
-		std::vector<std::thread> pool;
-		const int band = (height + (int)threads - 1) / (int)threads;
-		for (unsigned i = 0; i < threads; i++) {
-			const int y0 = (int)i * band;
-			const int y1 = std::min(height, y0 + band);
-			if (y0 >= y1) {
-				break;
+		const int band = 16;
+		std::atomic<int> next{ 0 };
+		auto worker = [this, &next, band]() {
+			for (;;) {
+				const int y0 = next.fetch_add(band);
+				if (y0 >= height) {
+					break;
+				}
+				_rasterize_band(y0, std::min(height, y0 + band));
 			}
-			pool.emplace_back([this, y0, y1]() { _rasterize_band(y0, y1); });
+		};
+		std::vector<std::thread> pool;
+		for (unsigned i = 1; i < threads; i++) {
+			pool.emplace_back(worker);
 		}
+		worker(); // This thread works too.
 		for (std::thread &t : pool) {
 			t.join();
 		}
 	}
+	double t3 = T();
 	_draw_lines();
 	_draw_points();
+	if (prof) fprintf(stderr, "sky %.2f shadow %.2f raster+shade %.2f lines %.2f\n", t1 - t0, t2 - t1, t3 - t2, T() - t3);
 }
 
 uint32_t Renderer3D::pick(int p_x, int p_y) const {

@@ -12,6 +12,7 @@
 #include <stb/stb_image.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <map>
 #include <cmath>
 
@@ -697,6 +698,35 @@ static void upscale(const uint32_t *p_src, int p_sw, int p_sh, std::vector<uint3
 			out[x] = 0xFF000000 | rb | g;
 		}
 	}
+}
+
+int bench_3d(const std::string &p_project_dir) {
+	Project project;
+	Scene scene;
+	if (!Project::load(p_project_dir, project) || !Scene::load(project.get_scene_file(), scene) || !scene.is_3d) {
+		fprintf(stderr, "Not a 3D project.\n");
+		return 2;
+	}
+	Game3D g;
+	g.scene = scene;
+	g.project_dir = project.path;
+	g.init();
+	ImGui::CreateContext(); // update() reads the keyboard state.
+	ImGui::GetIO().DisplaySize = ImVec2(1280, 720);
+	ImGui::GetIO().Fonts->Build();
+	ImGui::NewFrame();
+	g.update(0.016f, 0.0);
+	const int frames = 30;
+	g.render(1280, 720, 0.0); // Warm up (mesh caches).
+	const double t0 = platform::get_time();
+	for (int i = 0; i < frames; i++) {
+		g.render(1280, 720, i * 0.016);
+	}
+	const double ms = (platform::get_time() - t0) * 1000.0 / frames;
+	printf("%.2f ms/frame (%.0f FPS), %zu triangles\n", ms, 1000.0 / ms, g.renderer.get_triangle_count());
+	ImGui::EndFrame();
+	ImGui::DestroyContext();
+	return 0;
 }
 
 int run_game(const std::string &p_project_dir, const std::string &p_start_level) {

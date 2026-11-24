@@ -27,6 +27,9 @@ struct SpriteCache {
 // p_sprites (optional) draws rectangles that have a texture as sprites.
 void draw_scene(ImDrawList *p_draw_list, const Scene &p_scene, ImVec2 p_origin, float p_zoom, ImFont *p_font, double p_time, bool p_animate, SpriteCache *p_sprites = nullptr);
 
+// Renders the project's first level (3D) at 1280x720 a few times and prints the average frame time.
+int bench_3d(const std::string &p_project_dir);
+
 // Opens a window and plays the project in p_project_dir. Returns the process exit code.
 // p_start_level: scene file to start from (empty = the first level).
 int run_game(const std::string &p_project_dir, const std::string &p_start_level = std::string());
