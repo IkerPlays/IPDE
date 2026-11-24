@@ -9,6 +9,7 @@
 #include <dwmapi.h>
 #include <shellapi.h>
 #include <shlobj.h>
+#include <xinput.h>
 #include <shobjidl.h>
 
 #include <cfloat>
@@ -278,6 +279,82 @@ void destroy_window() {
 	}
 }
 
+/* Gamepads (XInput, loaded at runtime so no extra DLL is required) */
+
+typedef DWORD(WINAPI *XInputGetStateFn)(DWORD, XINPUT_STATE *);
+static XInputGetStateFn g_xinput_get_state = nullptr;
+static bool g_xinput_loaded = false;
+static double g_next_pad_scan = 0.0;
+static int g_pad_index = -1;
+
+static void poll_gamepad() {
+	if (!g_xinput_loaded) {
+		g_xinput_loaded = true;
+		HMODULE lib = LoadLibraryW(L"xinput1_4.dll");
+		if (!lib) {
+			lib = LoadLibraryW(L"xinput9_1_0.dll");
+		}
+		if (lib) {
+			g_xinput_get_state = (XInputGetStateFn)(void *)GetProcAddress(lib, "XInputGetState");
+		}
+	}
+	if (!g_xinput_get_state || !ImGui::GetCurrentContext()) {
+		return;
+	}
+	ImGuiIO &io = ImGui::GetIO();
+	XINPUT_STATE st = {};
+	// Looking for a newly connected pad is slow, so only do it once a second.
+	if (g_pad_index < 0 || g_xinput_get_state((DWORD)g_pad_index, &st) != ERROR_SUCCESS) {
+		g_pad_index = -1;
+		if (get_time() < g_next_pad_scan) {
+			io.BackendFlags &= ~ImGuiBackendFlags_HasGamepad;
+			return;
+		}
+		g_next_pad_scan = get_time() + 1.0;
+		for (DWORD i = 0; i < 4; i++) {
+			if (g_xinput_get_state(i, &st) == ERROR_SUCCESS) {
+				g_pad_index = (int)i;
+				break;
+			}
+		}
+		if (g_pad_index < 0) {
+			io.BackendFlags &= ~ImGuiBackendFlags_HasGamepad;
+			return;
+		}
+	}
+	io.BackendFlags |= ImGuiBackendFlags_HasGamepad;
+	const XINPUT_GAMEPAD &g = st.Gamepad;
+	auto button = [&](ImGuiKey k, WORD mask) { io.AddKeyEvent(k, (g.wButtons & mask) != 0); };
+	button(ImGuiKey_GamepadStart, XINPUT_GAMEPAD_START);
+	button(ImGuiKey_GamepadBack, XINPUT_GAMEPAD_BACK);
+	button(ImGuiKey_GamepadFaceDown, XINPUT_GAMEPAD_A);
+	button(ImGuiKey_GamepadFaceRight, XINPUT_GAMEPAD_B);
+	button(ImGuiKey_GamepadFaceLeft, XINPUT_GAMEPAD_X);
+	button(ImGuiKey_GamepadFaceUp, XINPUT_GAMEPAD_Y);
+	button(ImGuiKey_GamepadDpadLeft, XINPUT_GAMEPAD_DPAD_LEFT);
+	button(ImGuiKey_GamepadDpadRight, XINPUT_GAMEPAD_DPAD_RIGHT);
+	button(ImGuiKey_GamepadDpadUp, XINPUT_GAMEPAD_DPAD_UP);
+	button(ImGuiKey_GamepadDpadDown, XINPUT_GAMEPAD_DPAD_DOWN);
+	button(ImGuiKey_GamepadL1, XINPUT_GAMEPAD_LEFT_SHOULDER);
+	button(ImGuiKey_GamepadR1, XINPUT_GAMEPAD_RIGHT_SHOULDER);
+	auto axis = [&](ImGuiKey k, float v, float dead) {
+		v = (v - dead) / (1.0f - dead);
+		v = v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
+		io.AddKeyAnalogEvent(k, v > 0.1f, v);
+	};
+	const float ld = XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE / 32767.0f, rd = XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE / 32767.0f;
+	axis(ImGuiKey_GamepadLStickLeft, -g.sThumbLX / 32767.0f, ld);
+	axis(ImGuiKey_GamepadLStickRight, g.sThumbLX / 32767.0f, ld);
+	axis(ImGuiKey_GamepadLStickUp, g.sThumbLY / 32767.0f, ld);
+	axis(ImGuiKey_GamepadLStickDown, -g.sThumbLY / 32767.0f, ld);
+	axis(ImGuiKey_GamepadRStickLeft, -g.sThumbRX / 32767.0f, rd);
+	axis(ImGuiKey_GamepadRStickRight, g.sThumbRX / 32767.0f, rd);
+	axis(ImGuiKey_GamepadRStickUp, g.sThumbRY / 32767.0f, rd);
+	axis(ImGuiKey_GamepadRStickDown, -g.sThumbRY / 32767.0f, rd);
+	axis(ImGuiKey_GamepadL2, g.bLeftTrigger / 255.0f, 0.1f);
+	axis(ImGuiKey_GamepadR2, g.bRightTrigger / 255.0f, 0.1f);
+}
+
 bool pump_events(double p_wait_seconds) {
 	if (p_wait_seconds > 0.0) {
 		MsgWaitForMultipleObjects(0, nullptr, FALSE, (DWORD)(p_wait_seconds * 1000.0), QS_ALLINPUT);
@@ -290,6 +367,7 @@ bool pump_events(double p_wait_seconds) {
 		TranslateMessage(&msg);
 		DispatchMessageW(&msg);
 	}
+	poll_gamepad();
 	return !g_quit;
 }
 

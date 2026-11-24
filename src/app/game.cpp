@@ -114,6 +114,16 @@ void draw_scene(ImDrawList *p_dl, const Scene &p_scene, ImVec2 p_origin, float p
 	}
 }
 
+/* Gamepad helpers */
+
+static float pad_value(ImGuiKey p_key) {
+	return ImGui::GetKeyData(p_key)->AnalogValue;
+}
+
+static bool pad_pressed(ImGuiKey p_key) {
+	return ImGui::IsKeyPressed(p_key, false);
+}
+
 /* Shared helpers */
 
 struct Box {
@@ -481,6 +491,9 @@ struct Game3D {
 			if (ImGui::IsKeyDown(ImGuiKey_S) || ImGui::IsKeyDown(ImGuiKey_DownArrow)) {
 				mz += 1;
 			}
+			// Gamepad: left stick or D-pad.
+			mx += pad_value(ImGuiKey_GamepadLStickRight) - pad_value(ImGuiKey_GamepadLStickLeft) + (ImGui::IsKeyDown(ImGuiKey_GamepadDpadRight) ? 1.0f : 0.0f) - (ImGui::IsKeyDown(ImGuiKey_GamepadDpadLeft) ? 1.0f : 0.0f);
+			mz += pad_value(ImGuiKey_GamepadLStickDown) - pad_value(ImGuiKey_GamepadLStickUp) + (ImGui::IsKeyDown(ImGuiKey_GamepadDpadDown) ? 1.0f : 0.0f) - (ImGui::IsKeyDown(ImGuiKey_GamepadDpadUp) ? 1.0f : 0.0f);
 			const float yaw = (follow >= 0 ? cam_yaw : std::atan2(scene.camera_x - scene.camera_target_x, scene.camera_z - scene.camera_target_z) / DEG2RAD) * DEG2RAD;
 			const Vec3 forward(-std::sin(yaw), 0, -std::cos(yaw));
 			const Vec3 right(std::cos(yaw), 0, -std::sin(yaw));
@@ -492,7 +505,7 @@ struct Game3D {
 			const Vec3 delta = move * (p.player_speed * dt);
 
 			// Gravity and jumping.
-			if (p.can_jump && on_ground && ImGui::IsKeyPressed(ImGuiKey_Space, false)) {
+			if (p.can_jump && on_ground && (ImGui::IsKeyPressed(ImGuiKey_Space, false) || pad_pressed(ImGuiKey_GamepadFaceDown))) {
 				velocity_y = p.jump_force;
 				on_ground = false;
 				g_audio.play(nullptr, audio::sfx::jump());
@@ -620,6 +633,10 @@ struct Game3D {
 		// Camera.
 		const int mode = follow >= 0 ? scene.camera_mode : 0;
 		if (mode != 2) {
+			// Gamepad: right stick turns the camera.
+			cam_yaw -= (pad_value(ImGuiKey_GamepadRStickRight) - pad_value(ImGuiKey_GamepadRStickLeft)) * 140.0f * dt;
+			const float plo = mode == 1 ? -80.0f : 5.0f, phi = mode == 1 ? 80.0f : 75.0f;
+			cam_pitch = std::clamp(cam_pitch + (pad_value(ImGuiKey_GamepadRStickDown) - pad_value(ImGuiKey_GamepadRStickUp)) * 90.0f * dt, plo, phi);
 			if (ImGui::IsKeyDown(ImGuiKey_Q)) {
 				cam_yaw += 90.0f * dt;
 			}
@@ -910,7 +927,7 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 		io.DeltaTime = std::max(1e-4f, dt);
 		ImGui::NewFrame();
 
-		if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+		if (ImGui::IsKeyPressed(ImGuiKey_Escape, false) || pad_pressed(ImGuiKey_GamepadStart)) {
 			paused = !paused;
 			if (paused) {
 				pause_started = now;
@@ -918,7 +935,7 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 				start += now - pause_started; // The game clock doesn't run while paused.
 			}
 		}
-		bool restart = !paused && ImGui::IsKeyPressed(ImGuiKey_R, false);
+		bool restart = !paused && (ImGui::IsKeyPressed(ImGuiKey_R, false) || pad_pressed(ImGuiKey_GamepadBack));
 		bool quit = false;
 		if (paused) {
 			// Pause menu.
@@ -1060,6 +1077,8 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 			if (ImGui::IsKeyDown(ImGuiKey_D) || ImGui::IsKeyDown(ImGuiKey_RightArrow)) {
 				mx += 1;
 			}
+			mx += pad_value(ImGuiKey_GamepadLStickRight) - pad_value(ImGuiKey_GamepadLStickLeft) + (ImGui::IsKeyDown(ImGuiKey_GamepadDpadRight) ? 1.0f : 0.0f) - (ImGui::IsKeyDown(ImGuiKey_GamepadDpadLeft) ? 1.0f : 0.0f);
+			mx = std::clamp(mx, -1.0f, 1.0f);
 			if (!scene.platformer) {
 				if (ImGui::IsKeyDown(ImGuiKey_W) || ImGui::IsKeyDown(ImGuiKey_UpArrow)) {
 					my -= 1;
@@ -1067,13 +1086,14 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 				if (ImGui::IsKeyDown(ImGuiKey_S) || ImGui::IsKeyDown(ImGuiKey_DownArrow)) {
 					my += 1;
 				}
+				my += pad_value(ImGuiKey_GamepadLStickDown) - pad_value(ImGuiKey_GamepadLStickUp) + (ImGui::IsKeyDown(ImGuiKey_GamepadDpadDown) ? 1.0f : 0.0f) - (ImGui::IsKeyDown(ImGuiKey_GamepadDpadUp) ? 1.0f : 0.0f);
 				const float len = std::sqrt(mx * mx + my * my);
-				if (len > 0) {
+				if (len > 1.0f) {
 					mx /= len;
 					my /= len;
 				}
 			}
-			const bool jump_pressed = ImGui::IsKeyPressed(ImGuiKey_Space, false) || ImGui::IsKeyPressed(ImGuiKey_W, false) || ImGui::IsKeyPressed(ImGuiKey_UpArrow, false);
+			const bool jump_pressed = ImGui::IsKeyPressed(ImGuiKey_Space, false) || ImGui::IsKeyPressed(ImGuiKey_W, false) || ImGui::IsKeyPressed(ImGuiKey_UpArrow, false) || pad_pressed(ImGuiKey_GamepadFaceDown);
 			for (Entity &p : ents) {
 				if (!p.player || status2d.goal_time > 0) {
 					continue;
