@@ -483,6 +483,9 @@ static void draw_versions(App &p_app) {
 			if (!r.stable && !g_show_devbuilds && r.sort_key() != current) {
 				continue;
 			}
+			if (r.asset_url.empty() && r.sort_key() != current) {
+				continue; // Old versions without a Windows download (IPDE <= 0.2.x was based on Godot).
+			}
 			ImGui::TableNextRow();
 			ImGui::TableNextColumn();
 			if (ImGui::Selectable(r.display_name().c_str(), g_selected_release == i, ImGuiSelectableFlags_SpanAllColumns)) {

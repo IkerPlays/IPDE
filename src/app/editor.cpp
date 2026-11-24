@@ -227,8 +227,9 @@ static void draw_scene_panel(App &p_app, float p_width) {
 		if (ImGui::Selectable(label.c_str(), g_ed.selected == i)) {
 			g_ed.selected = i;
 		}
-		ImGui::SameLine(ImGui::GetContentRegionAvail().x - 60 * s + ImGui::GetCursorPosX() - ImGui::GetStyle().ItemSpacing.x);
-		ImGui::TextDisabled("%s", entity_type_name(e.type));
+		const char *type_name = entity_type_name(e.type);
+		ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - ImGui::CalcTextSize(type_name).x);
+		ImGui::TextDisabled("%s", type_name);
 		ImGui::PopID();
 	}
 	ImGui::EndChild();
