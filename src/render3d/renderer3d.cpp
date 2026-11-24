@@ -89,6 +89,7 @@ void Renderer3D::begin(const Camera3D &p_camera, const Environment3D &p_env, con
 	sun_dir_to_light = (-env.sun_direction).normalized();
 	triangles.clear();
 	lines.clear();
+	points.clear();
 	materials.clear();
 	shadow_casters.clear();
 	shadow_valid = false;
@@ -206,6 +207,10 @@ void Renderer3D::draw_line(const Vec3 &p_a, const Vec3 &p_b, uint32_t p_color, b
 	lines.push_back({ p_a, p_b, p_color, p_depth_test });
 }
 
+void Renderer3D::draw_point(const Vec3 &p_center, float p_radius, uint32_t p_color) {
+	points.push_back({ p_center, p_radius, p_color });
+}
+
 void Renderer3D::_draw_sky() {
 	// Vertical gradient using the view ray of each row (center column).
 	const Vec3 top = env.sky_top, hor = env.sky_horizon, gnd = env.ground;
@@ -223,6 +228,38 @@ void Renderer3D::_draw_sky() {
 		const uint32_t px = linear_to_argb(c * env.exposure);
 		uint32_t *row = color.data() + (size_t)y * width;
 		std::fill(row, row + width, px);
+	}
+	// Sun disc and glow.
+	const Vec3 to_sun = (env.sun_direction * -1.0f).normalized();
+	const Vec3 far_point = camera.position + to_sun * (camera.zfar * 0.5f);
+	const Vec4 cs = view_proj * Vec4(far_point.x, far_point.y, far_point.z, 1);
+	if (cs.w <= 0 || to_sun.y < -0.05f || env.sun_energy <= 0) {
+		return;
+	}
+	const float sx = (cs.x / cs.w * 0.5f + 0.5f) * width;
+	const float sy = (1.0f - (cs.y / cs.w * 0.5f + 0.5f)) * height;
+	const float px_per_rad = height * 0.5f / std::tan(camera.fov * DEG2RAD * 0.5f);
+	const float glow_r = 0.35f * px_per_rad;
+	const int x0 = std::max(0, (int)(sx - glow_r)), x1 = std::min(width - 1, (int)(sx + glow_r));
+	const int y0 = std::max(0, (int)(sy - glow_r)), y1 = std::min(height - 1, (int)(sy + glow_r));
+	const Vec3 sun = env.sun_color * std::min(env.sun_energy, 3.0f);
+	for (int y = y0; y <= y1; y++) {
+		const float ndc_y = 1.0f - 2.0f * ((float)y + 0.5f) / height;
+		const Vec4 pn = inv_view_proj * Vec4(0, ndc_y, -1, 1);
+		const Vec4 pf = inv_view_proj * Vec4(0, ndc_y, 1, 1);
+		const Vec3 dir = (pf.xyz() / pf.w - pn.xyz() / pn.w).normalized();
+		const Vec3 base = dir.y >= 0 ? lerp(hor, top, std::pow(std::min(1.0f, dir.y), 0.55f)) : lerp(hor, gnd, std::min(1.0f, -dir.y * 3.0f));
+		uint32_t *row = color.data() + (size_t)y * width;
+		for (int x = x0; x <= x1; x++) {
+			const float dx = x + 0.5f - sx, dy = y + 0.5f - sy;
+			const float ang = std::sqrt(dx * dx + dy * dy) / px_per_rad;
+			if (ang > 0.35f) {
+				continue;
+			}
+			const float disc = std::clamp((0.03f - ang) / 0.006f, 0.0f, 1.0f);
+			const float glow = std::exp(-ang * 14.0f) * 0.45f;
+			row[x] = linear_to_argb((base + sun * (disc * 4.0f + glow)) * env.exposure);
+		}
 	}
 }
 
@@ -483,6 +520,40 @@ static inline uint32_t blend_argb(uint32_t p_dst, uint32_t p_src) {
 	return 0xFF000000u | (r << 16) | (g << 8) | b;
 }
 
+void Renderer3D::_draw_points() {
+	const float focal = height * 0.5f / std::tan(camera.fov * DEG2RAD * 0.5f);
+	for (const Point &pt : points) {
+		const Vec4 c = view_proj * Vec4(pt.center.x, pt.center.y, pt.center.z, 1);
+		if (c.w <= camera.znear) {
+			continue;
+		}
+		const float iw = 1.0f / c.w;
+		const float sx = (c.x * iw * 0.5f + 0.5f) * width;
+		const float sy = (1.0f - (c.y * iw * 0.5f + 0.5f)) * height;
+		const float z = c.z * iw * 0.5f + 0.5f;
+		const float r = std::max(0.75f, pt.radius * focal * iw);
+		const int x0 = std::max(0, (int)(sx - r)), x1 = std::min(width - 1, (int)(sx + r));
+		const int y0 = std::max(0, (int)(sy - r)), y1 = std::min(height - 1, (int)(sy + r));
+		const uint32_t base_alpha = pt.color >> 24;
+		for (int y = y0; y <= y1; y++) {
+			for (int x = x0; x <= x1; x++) {
+				const float dx = x + 0.5f - sx, dy = y + 0.5f - sy;
+				const float d2 = (dx * dx + dy * dy) / (r * r);
+				if (d2 > 1.0f) {
+					continue;
+				}
+				const size_t idx = (size_t)y * width + x;
+				if (z > depth[idx]) {
+					continue;
+				}
+				// Soft edge.
+				const uint32_t a = (uint32_t)(base_alpha * std::min(1.0f, (1.0f - d2) * 2.5f));
+				color[idx] = blend_argb(color[idx], (a << 24) | (pt.color & 0xFFFFFF));
+			}
+		}
+	}
+}
+
 void Renderer3D::_draw_lines() {
 	for (const Line &l : lines) {
 		Vec4 ca = view_proj * Vec4(l.a.x, l.a.y, l.a.z, 1);
@@ -562,6 +633,7 @@ void Renderer3D::end() {
 		}
 	}
 	_draw_lines();
+	_draw_points();
 }
 
 uint32_t Renderer3D::pick(int p_x, int p_y) const {

@@ -83,6 +83,8 @@ public:
 	void draw_mesh(const Mesh &p_mesh, const Mat4 &p_model, const Material3D &p_material, uint32_t p_object_id = 0);
 	// Queues a 3D line drawn after the meshes (p_color is 0xAARRGGBB).
 	void draw_line(const Vec3 &p_a, const Vec3 &p_b, uint32_t p_color, bool p_depth_test = true);
+	// Queues a round particle (billboard) of p_radius world units, drawn after the meshes with depth test.
+	void draw_point(const Vec3 &p_center, float p_radius, uint32_t p_color);
 	// Renders everything queued since begin().
 	void end();
 
@@ -120,6 +122,11 @@ private:
 		uint32_t color;
 		bool depth_test;
 	};
+	struct Point {
+		Vec3 center;
+		float radius;
+		uint32_t color;
+	};
 	struct ShadowCaster {
 		const Mesh *mesh;
 		Mat4 model;
@@ -138,6 +145,8 @@ private:
 	Vec3 sun_dir_to_light;
 
 	std::vector<Triangle> triangles;
+	std::vector<Point> points;
+	void _draw_points();
 	std::vector<Line> lines;
 	std::vector<std::unique_ptr<Material3D>> materials; // Copies owned for the frame.
 	std::vector<ShadowCaster> shadow_casters;

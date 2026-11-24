@@ -240,6 +240,66 @@ struct GameAudio {
 
 static GameAudio g_audio;
 
+/* Particles (bursts when collecting, dying, bouncing...) */
+
+struct Particles {
+	struct P {
+		Vec3 pos, vel;
+		float life, max_life, size, gravity;
+		uint32_t color;
+	};
+	std::vector<P> list;
+	uint32_t seed = 0x1234567u;
+
+	float rnd() { // -1..1
+		seed = seed * 1664525u + 1013904223u;
+		return ((seed >> 8) & 0xFFFF) / 32767.5f - 1.0f;
+	}
+
+	// p_flat: 2D (no Z spread). Units are meters in 3D and pixels in 2D.
+	void burst(const Vec3 &p_pos, uint32_t p_color, int p_count, float p_speed, float p_size, float p_life, float p_gravity, bool p_flat, float p_up = 0.0f) {
+		for (int i = 0; i < p_count && list.size() < 2000; i++) {
+			P p;
+			p.pos = p_pos;
+			Vec3 d(rnd(), rnd(), p_flat ? 0.0f : rnd());
+			if (d.length_squared() < 1e-4f) {
+				d = Vec3(0, 1, 0);
+			}
+			p.vel = d.normalized() * (p_speed * (0.4f + 0.6f * std::fabs(rnd()))) + Vec3(0, p_up, 0);
+			p.max_life = p.life = p_life * (0.6f + 0.4f * std::fabs(rnd()));
+			p.size = p_size * (0.6f + 0.4f * std::fabs(rnd()));
+			p.gravity = p_gravity;
+			p.color = p_color;
+			list.push_back(p);
+		}
+	}
+
+	void update(float p_dt) {
+		for (P &p : list) {
+			p.vel.y += p.gravity * p_dt;
+			p.pos += p.vel * p_dt;
+			p.life -= p_dt;
+		}
+		list.erase(std::remove_if(list.begin(), list.end(), [](const P &p) { return p.life <= 0.0f; }), list.end());
+	}
+
+	static uint32_t faded(const P &p) {
+		const float k = std::clamp(p.life / p.max_life, 0.0f, 1.0f);
+		const uint32_t a = (uint32_t)(((p.color >> 24) & 0xFF) * std::min(1.0f, k * 1.5f));
+		return (a << 24) | (p.color & 0xFFFFFF);
+	}
+};
+
+static Particles g_fx;
+
+static void fx3d_burst(const Vec3 &p_pos, uint32_t p_color, int p_count, float p_speed, float p_up = 0.0f) {
+	g_fx.burst(p_pos, p_color | 0xFF000000, p_count, p_speed, 0.07f, 0.7f, -7.0f, false, p_up);
+}
+
+static void fx2d_burst(float p_x, float p_y, uint32_t p_color, int p_count, float p_speed, float p_up = 0.0f) {
+	g_fx.burst(Vec3(p_x, p_y, 0), p_color | 0xFF000000, p_count, p_speed, 4.0f, 0.7f, 900.0f, true, p_up);
+}
+
 /* 3D game */
 
 struct Game3D {
@@ -287,6 +347,7 @@ struct Game3D {
 
 	void die(double now) {
 		Entity &p = scene.entities[player];
+		fx3d_burst(Vec3(p.x, p.y, p.z), 0xFF4D5E, 36, 5.0f, 2.0f);
 		p.x = spawn.x;
 		p.y = spawn.y;
 		p.z = spawn.z;
@@ -382,6 +443,7 @@ struct Game3D {
 				velocity_y = p.jump_force;
 				on_ground = false;
 				g_audio.play(nullptr, audio::sfx::jump());
+				g_fx.burst(Vec3(p.x, p.y - p.height * 0.5f, p.z), 0xB0FFFFFF, 10, 1.6f, 0.06f, 0.4f, -1.0f, false);
 			}
 			velocity_y -= 20.0f * dt;
 			velocity_y = std::max(velocity_y, -40.0f);
@@ -436,6 +498,7 @@ struct Game3D {
 				velocity_y = bounce; // Jump pad.
 				on_ground = false;
 				g_audio.play(bounce_entity, audio::sfx::bounce());
+				fx3d_burst(Vec3(pos.x, pos.y - p.height * 0.5f, pos.z), bounce_entity ? bounce_entity->color : 0xFFFFFF, 20, 3.0f, 3.0f);
 				ground = -1;
 			}
 			p.x = pos.x;
@@ -453,6 +516,7 @@ struct Game3D {
 					o.visible = false;
 					score++;
 					g_audio.play(&o, score == total ? audio::sfx::goal() : audio::sfx::coin());
+					fx3d_burst(SceneRenderer3D::entity_position(o, now, true), o.color, 26, 3.5f, 1.5f);
 					if (score == total) {
 						all_collected_time = now;
 					}
@@ -471,6 +535,8 @@ struct Game3D {
 					status.goal_time = now;
 					status.level_time = now;
 					g_audio.play(&o, audio::sfx::goal());
+					fx3d_burst(SceneRenderer3D::entity_position(o, now, true), 0x3DDC84, 60, 6.0f, 5.0f);
+					fx3d_burst(SceneRenderer3D::entity_position(o, now, true), 0xFFC53D, 40, 5.0f, 5.0f);
 					break;
 				}
 			}
@@ -519,6 +585,9 @@ struct Game3D {
 		cam.fov = scene.camera_fov;
 		renderer.begin(cam, SceneRenderer3D::make_environment(scene), SceneRenderer3D::make_lights(scene, t, true));
 		scene_renderer.draw(renderer, scene, project_dir, t, true, false);
+		for (const Particles::P &p : g_fx.list) {
+			renderer.draw_point(p.pos, p.size * (0.4f + 0.6f * p.life / p.max_life), Particles::faded(p));
+		}
 		renderer.end();
 	}
 };
@@ -619,6 +688,7 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 			}
 		}
 		game3d.reset();
+		g_fx.list.clear();
 		if (scene.is_3d) {
 			game3d.scene = scene;
 			game3d.init();
@@ -676,6 +746,7 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 			break;
 		}
 		const double t = now - start;
+		g_fx.update(dt);
 		// Go to the next level a moment after reaching the goal.
 		{
 			const GameStatus &st = scene.is_3d ? game3d.status : status2d;
@@ -780,6 +851,7 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 						vel2d_y = -p.jump_force * 110.0f;
 						on_ground2d = false;
 						g_audio.play(nullptr, audio::sfx::jump());
+						g_fx.burst(Vec3(p.x, p.y + p.height * 0.5f, 0), 0xB0FFFFFF, 8, 120.0f, 3.0f, 0.35f, 300.0f, true);
 					}
 					vel2d_y = std::min(vel2d_y + scene.gravity_2d * dt, 2400.0f);
 					dy_move = vel2d_y * dt;
@@ -841,6 +913,7 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 											vel2d_y = -o.bounce * 110.0f; // Jump pad.
 											landed = false;
 											g_audio.play(&o, audio::sfx::bounce());
+											fx2d_burst(p.x, p.y + p.height * 0.5f, o.color, 18, 220.0f, -200.0f);
 										} else {
 											vel2d_y = 0;
 										}
@@ -871,6 +944,7 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 						o.visible = false;
 						score2d++;
 						g_audio.play(&o, score2d == total2d ? audio::sfx::goal() : audio::sfx::coin());
+						fx2d_burst(ox, oy, o.color, 24, 260.0f, -150.0f);
 						if (score2d == total2d) {
 							all2d_time = t;
 						}
@@ -892,6 +966,8 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 						status2d.goal_time = t;
 						status2d.level_time = t;
 						g_audio.play(&o, audio::sfx::goal());
+						fx2d_burst(ox, oy, 0x3DDC84, 50, 380.0f, -300.0f);
+						fx2d_burst(ox, oy, 0xFFC53D, 30, 320.0f, -300.0f);
 						break;
 					}
 				}
@@ -901,6 +977,7 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 					status2d.deaths++;
 					status2d.death_flash = t;
 					g_audio.play(nullptr, audio::sfx::hurt());
+					fx2d_burst(p.x, std::min(p.y, 4000.0f), 0xFF4D5E, 30, 300.0f, -150.0f);
 					for (size_t i = 0; i < ents.size(); i++) {
 						if (ents[i].player || ents[i].chase_speed != 0.0f) {
 							ents[i].x = initial2d[i].x;
@@ -920,6 +997,10 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 				}
 			}
 			draw_scene(ImGui::GetBackgroundDrawList(), scene, origin, 1.0f, font, t, true, &sprites);
+			for (const Particles::P &fp : g_fx.list) {
+				const uint32_t c = Particles::faded(fp);
+				ImGui::GetBackgroundDrawList()->AddCircleFilled(ImVec2(origin.x + fp.pos.x, origin.y + fp.pos.y), fp.size * (0.4f + 0.6f * fp.life / fp.max_life), to_imgui_color(c), 8);
+			}
 			draw_hud(font, score2d, total2d, all2d_time, t, w);
 			draw_status(font, status2d, t, w, h, level + 1 < project.scenes.size());
 			ImGui::Render();
