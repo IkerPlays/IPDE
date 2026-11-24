@@ -773,6 +773,8 @@ static void draw_scene_panel(App &p_app, float p_width) {
 			prefix = "[M] ";
 		} else if (e.door) {
 			prefix = "[P] ";
+		} else if (!e.message.empty()) {
+			prefix = "[T] ";
 		} else if (e.checkpoint) {
 			prefix = "[C] ";
 		} else if (!e.switch_target.empty()) {
@@ -1479,6 +1481,17 @@ static void draw_inspector(App &p_app) {
 		checkbox("Coleccionable", &e.collectible);
 		checkbox("Peligroso (reinicia al jugador)", &e.hazard);
 		checkbox("Meta (completa el nivel)", &e.goal);
+		{
+			char buf[512];
+			snprintf(buf, sizeof(buf), "%s", e.message.c_str());
+			if (ImGui::InputTextMultiline("Mensaje", buf, sizeof(buf), ImVec2(0, ImGui::GetTextLineHeight() * 3.2f))) {
+				e.message = buf;
+				g_ed.dirty = true;
+			}
+			if (ImGui::IsItemHovered()) {
+				ImGui::SetTooltip("Cartel o personaje: el texto aparece en pantalla cuando el jugador se acerca.");
+			}
+		}
 		checkbox("Puerta (se abre con todas las monedas)", &e.door);
 		checkbox("Punto de control", &e.checkpoint);
 		{

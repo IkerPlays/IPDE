@@ -167,6 +167,8 @@ struct GameStatus {
 	double level_time = 0; // Seconds it took.
 	double death_flash = -10; // Last time the player died.
 	bool game_over = false; // No lives left.
+	int message_entity = -1; // Entity whose message is shown.
+	double message_time = -10; // Last time the player touched it.
 };
 
 // Lives (hearts) and the level timer, top left under the help line.
@@ -206,6 +208,28 @@ static void draw_banner(ImFont *p_font, const char *p_msg, const char *p_sub, in
 	if (p_sub) {
 		fg->AddText(p_font, 22.0f, ImVec2(((float)p_w - ss.x) * 0.5f, mp.y + ms.y + 6), IM_COL32(220, 222, 240, 255), p_sub);
 	}
+}
+
+// Message box at the bottom of the screen (signs and characters).
+static void draw_message(ImFont *p_font, const std::string &p_text, const std::string &p_title, float p_alpha, int p_w, int p_h) {
+	if (p_text.empty() || p_alpha <= 0.0f) {
+		return;
+	}
+	ImDrawList *fg = ImGui::GetForegroundDrawList();
+	const float size = 24.0f;
+	const float max_w = std::min(900.0f, p_w - 80.0f);
+	const ImVec2 ts = p_font->CalcTextSizeA(size, FLT_MAX, max_w, p_text.c_str());
+	const float box_w = std::max(ts.x, 200.0f) + 48, box_h = ts.y + 40 + (p_title.empty() ? 0 : 28);
+	const ImVec2 p0((p_w - box_w) * 0.5f, p_h - box_h - 30);
+	const int a = (int)(255 * p_alpha);
+	fg->AddRectFilled(p0, ImVec2(p0.x + box_w, p0.y + box_h), IM_COL32(16, 17, 31, (int)(225 * p_alpha)), 14);
+	fg->AddRect(p0, ImVec2(p0.x + box_w, p0.y + box_h), IM_COL32(108, 123, 255, a), 14, 0, 2.0f);
+	float y = p0.y + 18;
+	if (!p_title.empty()) {
+		fg->AddText(p_font, 20.0f, ImVec2(p0.x + 24, y), IM_COL32(140, 155, 255, a), p_title.c_str());
+		y += 28;
+	}
+	fg->AddText(p_font, size, ImVec2(p0.x + 24, y), IM_COL32(255, 255, 255, a), p_text.c_str(), nullptr, max_w);
 }
 
 static void draw_status(ImFont *p_font, const GameStatus &p_st, double p_now, int p_w, int p_h, bool p_has_next) {
@@ -591,12 +615,22 @@ struct Game3D {
 			}
 			// Hazards, checkpoints, switches and the goal.
 			for (Entity &o : scene.entities) {
-				if (!o.visible || (!o.hazard && !o.goal && !o.checkpoint && o.switch_target.empty())) {
+				if (!o.visible || (!o.hazard && !o.goal && !o.checkpoint && o.switch_target.empty() && o.message.empty())) {
 					continue;
 				}
 				// Slightly taller box so standing on a plate (switch, checkpoint) counts as touching it.
 				Box touch = pb;
 				touch.min.y -= 0.06f;
+				// Messages show when the player is close (a small margin around the object).
+				if (!o.message.empty()) {
+					Box near_box = entity_box(o, SceneRenderer3D::entity_position(o, now, true));
+					near_box.min = near_box.min - Vec3(0.6f, 0.6f, 0.6f);
+					near_box.max = near_box.max + Vec3(0.6f, 0.6f, 0.6f);
+					if (pb.overlaps(near_box)) {
+						status.message_entity = (int)(&o - scene.entities.data());
+						status.message_time = now;
+					}
+				}
 				if (touch.overlaps(entity_box(o, SceneRenderer3D::entity_position(o, now, true)))) {
 					if (o.hazard) {
 						die(now);
@@ -618,6 +652,9 @@ struct Game3D {
 							}
 						}
 						continue;
+					}
+					if (!o.goal) {
+						continue; // Only a message.
 					}
 					status.goal_time = now;
 					status.level_time = now;
@@ -1042,6 +1079,10 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 			draw_rules_hud(font, scene, game3d.status.deaths, game3d.status.goal_time > 0 ? game3d.status.level_time : t, game3d.status.goal_time > 0);
 			draw_hud(font, game3d.score, game3d.total, game3d.all_collected_time, t, w);
 			draw_status(font, game3d.status, t, w, h, level + 1 < project.scenes.size());
+			if (game3d.status.message_entity >= 0) {
+				const Entity &me = scene.entities[game3d.status.message_entity];
+				draw_message(font, me.message, me.name, (float)std::clamp((game3d.status.message_time + 0.4 - t) / 0.3, 0.0, 1.0), w, h);
+			}
 			draw_level_intro();
 			if (show_stats) {
 				char stats[128];
@@ -1234,11 +1275,20 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 				// Hazards and the goal.
 				bool died = false;
 				for (Entity &o : ents) {
-					if (!o.visible || (!o.hazard && !o.goal && !o.checkpoint && o.switch_target.empty()) || &o == &p) {
+					if (!o.visible || (!o.hazard && !o.goal && !o.checkpoint && o.switch_target.empty() && o.message.empty()) || &o == &p) {
 						continue;
 					}
 					float ox, oy, orot;
 					entity_animated_transform(o, t, true, ox, oy, orot);
+					if (!o.message.empty()) {
+						Box near_box = entity_box(o, Vec3(ox, oy, 0));
+						near_box.min = near_box.min - Vec3(24, 24, 0);
+						near_box.max = near_box.max + Vec3(24, 24, 0);
+						if (pb.overlaps(near_box)) {
+							status2d.message_entity = (int)(&o - ents.data());
+							status2d.message_time = t;
+						}
+					}
 					Box touch = pb; // A bit taller so standing on a plate counts as touching it.
 					touch.max.y += 2.0f;
 					if (touch.overlaps(entity_box(o, Vec3(ox, oy, 0)))) {
@@ -1262,6 +1312,9 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 								}
 							}
 							continue;
+						}
+						if (!o.goal) {
+							continue; // Only a message.
 						}
 						status2d.goal_time = t;
 						status2d.level_time = t;
@@ -1312,6 +1365,10 @@ int run_game(const std::string &p_project_dir, const std::string &p_start_level)
 			}
 			draw_rules_hud(font, scene, status2d.deaths, status2d.goal_time > 0 ? status2d.level_time : t, status2d.goal_time > 0);
 			draw_status(font, status2d, t, w, h, level + 1 < project.scenes.size());
+			if (status2d.message_entity >= 0) {
+				const Entity &me = ents[status2d.message_entity];
+				draw_message(font, me.message, me.name, (float)std::clamp((status2d.message_time + 0.4 - t) / 0.3, 0.0, 1.0), w, h);
+			}
 			draw_level_intro();
 			ImGui::Render();
 			renderer.resize(w, h);

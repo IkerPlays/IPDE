@@ -81,6 +81,7 @@ struct Entity {
 	float chase_speed = 0.0f; // Enemy: follows the player when near (0 = off).
 	float chase_range = 8.0f;
 	std::string sound; // WAV played when it is collected or touched (instead of the built-in effect).
+	std::string message; // Shown on screen while the player touches it (signs, characters...).
 	bool door = false; // Disappears when every coin of the level has been collected.
 	bool checkpoint = false; // Touching it makes the player respawn there.
 	std::string switch_target; // Touching it shows/hides every entity with this name (once).

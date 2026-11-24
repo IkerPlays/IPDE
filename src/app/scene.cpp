@@ -178,6 +178,9 @@ Json Scene::to_json() const {
 		if (e.door) {
 			je["door"] = true;
 		}
+		if (!e.message.empty()) {
+			je["message"] = e.message;
+		}
 		if (e.checkpoint) {
 			je["checkpoint"] = true;
 		}
@@ -279,6 +282,7 @@ Scene Scene::from_json(const Json &p_json) {
 		en.chase_speed = (float)je["chase_speed"].as_number(0);
 		en.sound = je["sound"].as_string();
 		en.door = je["door"].as_bool(false);
+		en.message = je["message"].as_string();
 		en.checkpoint = je["checkpoint"].as_bool(false);
 		en.switch_target = je["switch_target"].as_string();
 		en.chase_range = (float)je["chase_range"].as_number(entity_type_is_3d(en.type) ? 8.0 : 300.0);
@@ -547,6 +551,12 @@ static Scene example_scene_3d() {
 	enemy.solid = false;
 	enemy.roughness = 0.3f;
 	s.entities.push_back(enemy);
+
+	Entity sign = make3d("Cartel", EntityType::CUBE, 2.2f, 0.6f, 5.0f, 0.9f, 1.2f, 0.2f, 0xFFB0705A);
+	sign.message = "¡Bienvenido! Recoge las monedas, cuidado con el enemigo rojo y sube a la torre con la plataforma para llegar a la meta.";
+	sign.pattern = 3; // Stripes (wood-like).
+	sign.pattern_scale = 0.3f;
+	s.entities.push_back(sign);
 
 	Entity orb = make3d("Orbe", EntityType::SPHERE, 10, 1.5f, -2, 1.5f, 1.5f, 1.5f, 0xFF8B3DFF);
 	orb.emission = 1.5f;
