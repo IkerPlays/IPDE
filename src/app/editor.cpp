@@ -1218,6 +1218,12 @@ static void draw_environment(App &p_app) {
 		drag_float("Fin", &env.fog_end, 0.5f, 1, 2000, "%.0f m");
 	}
 	ImGui::SeparatorText("Cámara del juego");
+	{
+		const char *modes[] = { "Tercera persona", "Primera persona", "Desde arriba" };
+		if (ImGui::Combo("Modo", &sc.camera_mode, modes, IM_ARRAYSIZE(modes))) {
+			g_ed.dirty = true;
+		}
+	}
 	drag_float("Campo de visión", &sc.camera_fov, 0.2f, 20, 120, "%.0f°");
 	ui::dim_text("Se usa si ninguna entidad tiene \"La cámara lo sigue\".");
 	if (ImGui::Button("Usar la vista actual", ImVec2(-1, 0))) {

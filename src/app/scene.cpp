@@ -106,6 +106,7 @@ Json Scene::to_json() const {
 	cam["target_y"] = (double)camera_target_y;
 	cam["target_z"] = (double)camera_target_z;
 	cam["fov"] = (double)camera_fov;
+	cam["mode"] = camera_mode;
 	j["camera"] = cam;
 
 	j["lives"] = lives;
@@ -220,6 +221,7 @@ Scene Scene::from_json(const Json &p_json) {
 	s.camera_target_y = (float)cam["target_y"].as_number(s.camera_target_y);
 	s.camera_target_z = (float)cam["target_z"].as_number(s.camera_target_z);
 	s.camera_fov = (float)cam["fov"].as_number(s.camera_fov);
+	s.camera_mode = std::clamp((int)cam["mode"].as_number(0), 0, 2);
 
 	s.lives = std::max(0, (int)p_json["lives"].as_number(0));
 	s.show_timer = p_json["show_timer"].as_bool(false);

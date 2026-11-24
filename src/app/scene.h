@@ -115,6 +115,7 @@ struct Scene {
 	float camera_x = 0, camera_y = 4, camera_z = 10;
 	float camera_target_x = 0, camera_target_y = 0, camera_target_z = 0;
 	float camera_fov = 60.0f;
+	int camera_mode = 0; // 3D camera that follows the player: 0 = third person, 1 = first person, 2 = top-down.
 	// Rules.
 	int lives = 0; // Falls allowed before "game over" (0 = unlimited).
 	bool show_timer = false; // Shows the level time in the HUD.

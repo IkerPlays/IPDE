@@ -417,6 +417,9 @@ struct Game3D {
 	}
 
 	void init() {
+		if (scene.camera_mode == 1) {
+			cam_pitch = 5.0f;
+		}
 		for (const Entity &e : scene.entities) {
 			start_positions.push_back(Vec3(e.x, e.y, e.z));
 		}
@@ -615,29 +618,77 @@ struct Game3D {
 		prev_time = now;
 
 		// Camera.
-		if (ImGui::IsKeyDown(ImGuiKey_Q)) {
-			cam_yaw += 90.0f * dt;
-		}
-		if (ImGui::IsKeyDown(ImGuiKey_E)) {
-			cam_yaw -= 90.0f * dt;
-		}
-		if (ImGui::IsMouseDragging(ImGuiMouseButton_Right) || ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
-			cam_yaw -= ImGui::GetIO().MouseDelta.x * 0.3f;
-			cam_pitch = std::clamp(cam_pitch + ImGui::GetIO().MouseDelta.y * 0.2f, 5.0f, 75.0f);
+		const int mode = follow >= 0 ? scene.camera_mode : 0;
+		if (mode != 2) {
+			if (ImGui::IsKeyDown(ImGuiKey_Q)) {
+				cam_yaw += 90.0f * dt;
+			}
+			if (ImGui::IsKeyDown(ImGuiKey_E)) {
+				cam_yaw -= 90.0f * dt;
+			}
+			if (ImGui::IsMouseDragging(ImGuiMouseButton_Right) || ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+				cam_yaw -= ImGui::GetIO().MouseDelta.x * 0.3f;
+				const float lo = mode == 1 ? -80.0f : 5.0f, hi = mode == 1 ? 80.0f : 75.0f;
+				cam_pitch = std::clamp(cam_pitch + ImGui::GetIO().MouseDelta.y * 0.2f, lo, hi);
+			}
 		}
 		cam_distance = std::clamp(cam_distance - ImGui::GetIO().MouseWheel * 0.8f, 2.5f, 30.0f);
 		Vec3 desired_pos, desired_target;
+		bool snap = false;
 		if (follow >= 0) {
 			const Entity &f = scene.entities[follow];
 			const Vec3 fp(f.x, f.y, f.z);
 			const float yaw = cam_yaw * DEG2RAD, pitch = cam_pitch * DEG2RAD;
-			desired_target = fp + Vec3(0, std::max(0.5f, f.height * 0.4f), 0);
-			desired_pos = desired_target + Vec3(std::sin(yaw) * std::cos(pitch), std::sin(pitch), std::cos(yaw) * std::cos(pitch)) * cam_distance;
+			if (mode == 1) {
+				// First person: at eye height, looking where the mouse points.
+				desired_pos = fp + Vec3(0, f.height * 0.35f, 0);
+				desired_target = desired_pos + Vec3(-std::sin(yaw) * std::cos(pitch), -std::sin(pitch), -std::cos(yaw) * std::cos(pitch));
+				snap = true;
+			} else if (mode == 2) {
+				// Top-down: high above, slightly behind.
+				desired_target = fp;
+				desired_pos = fp + Vec3(0, cam_distance * 1.6f, cam_distance * 0.75f);
+				cam_yaw = 0.0f;
+			} else {
+				desired_target = fp + Vec3(0, std::max(0.5f, f.height * 0.4f), 0);
+				const Vec3 dir(std::sin(yaw) * std::cos(pitch), std::sin(pitch), std::cos(yaw) * std::cos(pitch));
+				// Don't go through walls: stop the camera before the first solid between it and the player.
+				float dist = cam_distance;
+				for (const Entity &o : scene.entities) {
+					if (&o == &f || !is_solid_3d(o) || o.has_motion()) {
+						continue;
+					}
+					const Box b = entity_box(o, Vec3(o.x, o.y, o.z));
+					float tmin = 0.0f, tmax = dist;
+					bool hit = true;
+					for (int k = 0; k < 3 && hit; k++) {
+						const float o0 = k == 0 ? desired_target.x : (k == 1 ? desired_target.y : desired_target.z);
+						const float d0 = k == 0 ? dir.x : (k == 1 ? dir.y : dir.z);
+						const float lo = k == 0 ? b.min.x : (k == 1 ? b.min.y : b.min.z);
+						const float hi = k == 0 ? b.max.x : (k == 1 ? b.max.y : b.max.z);
+						if (std::fabs(d0) < 1e-6f) {
+							hit = o0 >= lo && o0 <= hi;
+						} else {
+							float t1 = (lo - o0) / d0, t2 = (hi - o0) / d0;
+							if (t1 > t2) {
+								std::swap(t1, t2);
+							}
+							tmin = std::max(tmin, t1);
+							tmax = std::min(tmax, t2);
+							hit = tmin <= tmax;
+						}
+					}
+					if (hit && tmin > 0.0f) {
+						dist = std::min(dist, std::max(1.1f, tmin - 0.3f));
+					}
+				}
+				desired_pos = desired_target + dir * dist;
+			}
 		} else {
 			desired_pos = Vec3(scene.camera_x, scene.camera_y, scene.camera_z);
 			desired_target = Vec3(scene.camera_target_x, scene.camera_target_y, scene.camera_target_z);
 		}
-		if (!cam_initialized) {
+		if (!cam_initialized || snap) {
 			cam_pos = desired_pos;
 			cam_target = desired_target;
 			cam_initialized = true;
@@ -655,7 +706,15 @@ struct Game3D {
 		cam.target = cam_target;
 		cam.fov = scene.camera_fov;
 		renderer.begin(cam, SceneRenderer3D::make_environment(scene), SceneRenderer3D::make_lights(scene, t, true));
+		// In first person the player's own body would block the view.
+		const bool hide_player = scene.camera_mode == 1 && follow >= 0 && follow == player;
+		if (hide_player) {
+			scene.entities[player].visible = false;
+		}
 		scene_renderer.draw(renderer, scene, project_dir, t, true, false);
+		if (hide_player) {
+			scene.entities[player].visible = true;
+		}
 		for (const Particles::P &p : g_fx.list) {
 			renderer.draw_point(p.pos, p.size * (0.4f + 0.6f * p.life / p.max_life), Particles::faded(p));
 		}
