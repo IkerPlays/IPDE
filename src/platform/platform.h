@@ -38,5 +38,7 @@ void open_folder(const std::string &p_path);
 
 // Native folder picker. Returns an empty string if canceled or unavailable.
 std::string pick_folder(const std::string &p_title);
+// Native file picker. p_filter_name e.g. "Modelos OBJ", p_pattern e.g. "*.obj". Empty if canceled.
+std::string pick_file(const std::string &p_title, const std::string &p_filter_name, const std::string &p_pattern);
 
 } // namespace ipde::platform

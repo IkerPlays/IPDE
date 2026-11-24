@@ -42,6 +42,11 @@ struct EditorState {
 
 	bool show_close_dialog = false;
 	std::string last_export;
+
+	// Undo / redo: snapshots of the scene (JSON) taken when an edit finishes.
+	std::vector<std::string> undo_stack;
+	std::vector<std::string> redo_stack;
+	std::string committed; // Scene as it was after the last finished edit.
 };
 
 static EditorState g_ed;
@@ -60,6 +65,71 @@ void editor_open(App &p_app) {
 	}
 	meshes::clear_cache();
 	g_scene_r3d = SceneRenderer3D();
+	g_ed.committed = g_ed.scene.to_json().dump(false);
+}
+
+// Records a history step when the scene changed and no edit is in progress (mouse released, no widget active).
+static void history_track() {
+	if (ImGui::IsAnyItemActive() || ImGui::IsMouseDown(ImGuiMouseButton_Left) || g_ed.drag3d || g_ed.dragging) {
+		return;
+	}
+	std::string now = g_ed.scene.to_json().dump(false);
+	if (now != g_ed.committed) {
+		g_ed.undo_stack.push_back(std::move(g_ed.committed));
+		if (g_ed.undo_stack.size() > 200) {
+			g_ed.undo_stack.erase(g_ed.undo_stack.begin());
+		}
+		g_ed.redo_stack.clear();
+		g_ed.committed = std::move(now);
+	}
+}
+
+static void history_apply(std::vector<std::string> &r_from, std::vector<std::string> &r_to) {
+	history_track(); // Commit pending edits first.
+	if (r_from.empty()) {
+		return;
+	}
+	r_to.push_back(g_ed.committed);
+	g_ed.committed = r_from.back();
+	r_from.pop_back();
+	std::string err;
+	const Json j = Json::parse(g_ed.committed, &err);
+	g_ed.scene = Scene::from_json(j);
+	if (g_ed.selected >= (int)g_ed.scene.entities.size()) {
+		g_ed.selected = -1;
+	}
+	g_ed.dirty = true;
+}
+
+static void undo() {
+	history_apply(g_ed.undo_stack, g_ed.redo_stack);
+}
+
+static void redo() {
+	history_apply(g_ed.redo_stack, g_ed.undo_stack);
+}
+
+// Copies an external file into the project's "assets" folder and returns its path relative to the project.
+static std::string import_asset(App &p_app, const std::string &p_title, const std::string &p_filter, const std::string &p_pattern) {
+	const std::string src = platform::pick_file(p_title, p_filter, p_pattern);
+	if (src.empty()) {
+		return std::string();
+	}
+	const std::string root = p_app.project.path;
+	if (src.size() > root.size() + 1 && src.compare(0, root.size(), root) == 0) {
+		std::string rel = src.substr(root.size() + 1); // Already inside the project.
+		std::replace(rel.begin(), rel.end(), '\\', '/');
+		return rel;
+	}
+	const std::string dir = fs::join(root, "assets");
+	fs::make_dirs(dir);
+	const std::string name = fs::get_file_name(src);
+	if (!fs::copy_file(src, fs::join(dir, name))) {
+		p_app.toast("No se pudo copiar el archivo.", true);
+		return std::string();
+	}
+	p_app.toast("Importado: assets/" + name);
+	return "assets/" + name;
 }
 
 static uint32_t argb_from_float4(const float p_c[4]) {
@@ -629,11 +699,32 @@ static void draw_inspector(App &p_app) {
 		}
 		drag_float("Brillo propio", &e.emission, 0.02f, 0, 20, "%.2f");
 		text_field("Textura (PNG)", e.texture);
+		if (ImGui::Button("Importar textura...")) {
+			const std::string rel = import_asset(p_app, "Importar textura", "Imágenes PNG", "*.png");
+			if (!rel.empty()) {
+				e.texture = rel;
+				g_ed.dirty = true;
+			}
+		}
+		if (!e.texture.empty()) {
+			ImGui::SameLine();
+			if (ImGui::Button("Quitar")) {
+				e.texture.clear();
+				g_ed.dirty = true;
+			}
+		}
 		if (!e.texture.empty()) {
 			drag_float("Escala UV", &e.uv_scale, 0.02f, 0.01f, 100, "%.2f");
 		}
 		if (e.type == EntityType::MODEL) {
 			text_field("Modelo (.obj)", e.model);
+			if (ImGui::Button("Importar modelo...")) {
+				const std::string rel = import_asset(p_app, "Importar modelo", "Modelos OBJ", "*.obj");
+				if (!rel.empty()) {
+					e.model = rel;
+					g_ed.dirty = true;
+				}
+			}
 			std::string err;
 			if (!e.model.empty() && !meshes::load_obj(fs::join(p_app.project.path, e.model), &err)) {
 				ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(theme::DANGER), "No se pudo cargar el modelo.");
@@ -709,6 +800,24 @@ static void draw_toolbar(App &p_app) {
 	ImGui::Text("%s%s", p_app.project.name.c_str(), g_ed.dirty ? " *" : "");
 
 	const float right = 380 * s;
+	ImGui::SameLine(ImGui::GetWindowWidth() - right - 200 * s);
+	ImGui::BeginDisabled(g_ed.undo_stack.empty());
+	if (ImGui::Button("Deshacer", ImVec2(92 * s, 0))) {
+		undo();
+	}
+	ImGui::EndDisabled();
+	if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+		ImGui::SetTooltip("Ctrl+Z");
+	}
+	ImGui::SameLine();
+	ImGui::BeginDisabled(g_ed.redo_stack.empty());
+	if (ImGui::Button("Rehacer", ImVec2(92 * s, 0))) {
+		redo();
+	}
+	ImGui::EndDisabled();
+	if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+		ImGui::SetTooltip("Ctrl+Y");
+	}
 	ImGui::SameLine(ImGui::GetWindowWidth() - right);
 	if (ImGui::Button("Guardar", ImVec2(100 * s, 0))) {
 		save(p_app);
@@ -892,6 +1001,16 @@ void draw_editor(App &p_app) {
 	if (!io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
 		delete_selected();
 	}
+	if (io.KeyCtrl && !io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_Z, true)) {
+		if (io.KeyShift) {
+			redo();
+		} else {
+			undo();
+		}
+	}
+	if (io.KeyCtrl && !io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_Y, true)) {
+		redo();
+	}
 	if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D, false)) {
 		duplicate_selected();
 	}
@@ -924,6 +1043,7 @@ void draw_editor(App &p_app) {
 
 	draw_close_dialog(p_app);
 	ImGui::End();
+	history_track();
 }
 
 } // namespace ipde

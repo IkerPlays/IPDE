@@ -101,7 +101,7 @@ static bool is_static_solid(const Entity &p_e) {
 
 static void draw_hud(ImFont *p_font, int p_score, int p_total, double p_time_all_collected, double p_now, int p_w) {
 	ImDrawList *fg = ImGui::GetForegroundDrawList();
-	fg->AddText(ImVec2(12, 10), IM_COL32(255, 255, 255, 140), "IPDE  ·  Esc para salir");
+	fg->AddText(ImVec2(12, 10), IM_COL32(255, 255, 255, 140), "IPDE  ·  Esc para salir  ·  F3: estadísticas");
 	if (p_total > 0) {
 		char buf[64];
 		snprintf(buf, sizeof(buf), "Monedas: %d / %d", p_score, p_total);
@@ -298,6 +298,43 @@ struct Game3D {
 	}
 };
 
+// Bilinear upscale of an 0xAARRGGBB image (used for the dynamic resolution of 3D games).
+static void upscale(const uint32_t *p_src, int p_sw, int p_sh, std::vector<uint32_t> &r_dst, int p_dw, int p_dh) {
+	r_dst.resize((size_t)p_dw * p_dh);
+	if (p_sw == p_dw && p_sh == p_dh) {
+		std::copy(p_src, p_src + r_dst.size(), r_dst.begin());
+		return;
+	}
+	const int fx_step = (int)(((int64_t)p_sw << 16) / p_dw);
+	const int fy_step = (int)(((int64_t)p_sh << 16) / p_dh);
+	for (int y = 0; y < p_dh; y++) {
+		int fy = y * fy_step + fy_step / 2 - 32768;
+		fy = std::max(0, std::min(fy, (p_sh - 1) << 16));
+		const int y0 = fy >> 16;
+		const int y1 = std::min(y0 + 1, p_sh - 1);
+		const uint32_t wy = (uint32_t)(fy & 0xFFFF) >> 8;
+		const uint32_t *r0 = p_src + (size_t)y0 * p_sw;
+		const uint32_t *r1 = p_src + (size_t)y1 * p_sw;
+		uint32_t *out = r_dst.data() + (size_t)y * p_dw;
+		for (int x = 0; x < p_dw; x++) {
+			int fx = x * fx_step + fx_step / 2 - 32768;
+			fx = std::max(0, std::min(fx, (p_sw - 1) << 16));
+			const int x0 = fx >> 16;
+			const int x1 = std::min(x0 + 1, p_sw - 1);
+			const uint32_t wx = (uint32_t)(fx & 0xFFFF) >> 8;
+			const uint32_t a = r0[x0], b = r0[x1], c = r1[x0], d = r1[x1];
+			// Two channels at a time (R/B and G).
+			const uint32_t rb_top = ((a & 0xFF00FF) * (256 - wx) + (b & 0xFF00FF) * wx) >> 8 & 0xFF00FF;
+			const uint32_t rb_bot = ((c & 0xFF00FF) * (256 - wx) + (d & 0xFF00FF) * wx) >> 8 & 0xFF00FF;
+			const uint32_t g_top = ((a & 0xFF00) * (256 - wx) + (b & 0xFF00) * wx) >> 8 & 0xFF00;
+			const uint32_t g_bot = ((c & 0xFF00) * (256 - wx) + (d & 0xFF00) * wx) >> 8 & 0xFF00;
+			const uint32_t rb = (rb_top * (256 - wy) + rb_bot * wy) >> 8 & 0xFF00FF;
+			const uint32_t g = (g_top * (256 - wy) + g_bot * wy) >> 8 & 0xFF00;
+			out[x] = 0xFF000000 | rb | g;
+		}
+	}
+}
+
 int run_game(const std::string &p_project_dir) {
 	Project project;
 	Scene scene;
@@ -337,6 +374,12 @@ int run_game(const std::string &p_project_dir) {
 		}
 	}
 
+	// Dynamic resolution (3D): lowers the internal resolution when frames take too long.
+	float render_scale = 1.0f;
+	double frame_avg = 1.0 / 60.0;
+	bool show_stats = false;
+	std::vector<uint32_t> scaled;
+
 	while (platform::pump_events(0.0)) {
 		const double now = platform::get_time();
 		const float dt = (float)std::min(0.05, now - last);
@@ -357,13 +400,33 @@ int run_game(const std::string &p_project_dir) {
 		}
 		const double t = now - start;
 
+		if (ImGui::IsKeyPressed(ImGuiKey_F3, false)) {
+			show_stats = !show_stats;
+		}
 		if (scene.is_3d) {
 			game3d.update(dt, t);
 			draw_hud(font, game3d.score, game3d.total, game3d.all_collected_time, t, w);
+			if (show_stats) {
+				char stats[128];
+				snprintf(stats, sizeof(stats), "%.0f FPS  ·  %.1f ms  ·  %d%%  ·  %zu tri", 1.0 / std::max(1e-6, frame_avg), frame_avg * 1000.0, (int)std::lround(render_scale * 100), game3d.renderer.get_triangle_count());
+				ImGui::GetForegroundDrawList()->AddText(font, 18.0f, ImVec2(12, 40), IM_COL32(255, 255, 255, 220), stats);
+			}
 			ImGui::Render();
-			game3d.render(w, h, t);
+			const int rw = std::max(16, (int)(w * render_scale));
+			const int rh = std::max(16, (int)(h * render_scale));
+			const double r0 = platform::get_time();
+			game3d.render(rw, rh, t);
+			const double frame_ms = platform::get_time() - r0;
+			frame_avg = frame_avg * 0.9 + frame_ms * 0.1;
+			// Aim for ~60 FPS; adjust the scale slowly to avoid flicker.
+			if (frame_avg > 1.0 / 45.0 && render_scale > 0.5f) {
+				render_scale = std::max(0.5f, render_scale - 0.02f);
+			} else if (frame_avg < 1.0 / 90.0 && render_scale < 1.0f) {
+				render_scale = std::min(1.0f, render_scale + 0.01f);
+			}
 			renderer.resize(w, h);
-			renderer.set_pixels(game3d.renderer.get_pixels());
+			upscale(game3d.renderer.get_pixels(), rw, rh, scaled, w, h);
+			renderer.set_pixels(scaled.data());
 			renderer.render(ImGui::GetDrawData());
 			platform::present(renderer.get_pixels(), w, h);
 		} else {

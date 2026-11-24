@@ -46,7 +46,18 @@ static ImGuiKey keysym_to_imgui(KeySym p_sym) {
 		case XK_Return: return ImGuiKey_Enter;
 		case XK_Escape: return ImGuiKey_Escape;
 		case XK_space: return ImGuiKey_Space;
+		case XK_F1: return ImGuiKey_F1;
+		case XK_F2: return ImGuiKey_F2;
+		case XK_F3: return ImGuiKey_F3;
+		case XK_F4: return ImGuiKey_F4;
 		case XK_F5: return ImGuiKey_F5;
+		case XK_F6: return ImGuiKey_F6;
+		case XK_F7: return ImGuiKey_F7;
+		case XK_F8: return ImGuiKey_F8;
+		case XK_F9: return ImGuiKey_F9;
+		case XK_F10: return ImGuiKey_F10;
+		case XK_F11: return ImGuiKey_F11;
+		case XK_F12: return ImGuiKey_F12;
 		default: break;
 	}
 	if (p_sym >= XK_a && p_sym <= XK_z) {
@@ -253,6 +264,11 @@ void open_folder(const std::string &p_path) {
 
 std::string pick_folder(const std::string &p_title) {
 	return std::string();
+}
+
+std::string pick_file(const std::string &p_title, const std::string &p_filter_name, const std::string &p_pattern) {
+	const char *env = getenv("IPDE_PICK_FILE"); // For tests.
+	return env ? std::string(env) : std::string();
 }
 
 } // namespace ipde::platform

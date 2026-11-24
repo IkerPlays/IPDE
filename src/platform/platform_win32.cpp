@@ -66,7 +66,18 @@ static ImGuiKey vk_to_imgui_key(WPARAM p_vk) {
 		case VK_CONTROL: return ImGuiKey_LeftCtrl;
 		case VK_MENU: return ImGuiKey_LeftAlt;
 		case VK_F2: return ImGuiKey_F2;
+		case VK_F1: return ImGuiKey_F1;
+		case VK_F2: return ImGuiKey_F2;
+		case VK_F3: return ImGuiKey_F3;
+		case VK_F4: return ImGuiKey_F4;
 		case VK_F5: return ImGuiKey_F5;
+		case VK_F6: return ImGuiKey_F6;
+		case VK_F7: return ImGuiKey_F7;
+		case VK_F8: return ImGuiKey_F8;
+		case VK_F9: return ImGuiKey_F9;
+		case VK_F10: return ImGuiKey_F10;
+		case VK_F11: return ImGuiKey_F11;
+		case VK_F12: return ImGuiKey_F12;
 		case VK_F6: return ImGuiKey_F6;
 		default: break;
 	}
@@ -402,6 +413,38 @@ std::string pick_folder(const std::string &p_title) {
 		dialog->GetOptions(&options);
 		dialog->SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM);
 		dialog->SetTitle(to_wide(p_title).c_str());
+		if (SUCCEEDED(dialog->Show(g_hwnd))) {
+			IShellItem *item = nullptr;
+			if (SUCCEEDED(dialog->GetResult(&item))) {
+				PWSTR path = nullptr;
+				if (SUCCEEDED(item->GetDisplayName(SIGDN_FILESYSPATH, &path))) {
+					result = to_utf8(path);
+					CoTaskMemFree(path);
+				}
+				item->Release();
+			}
+		}
+		dialog->Release();
+	}
+	if (SUCCEEDED(init)) {
+		CoUninitialize();
+	}
+	return result;
+}
+
+std::string pick_file(const std::string &p_title, const std::string &p_filter_name, const std::string &p_pattern) {
+	std::string result;
+	const HRESULT init = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+	IFileOpenDialog *dialog = nullptr;
+	if (SUCCEEDED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_ALL, IID_PPV_ARGS(&dialog)))) {
+		DWORD options = 0;
+		dialog->GetOptions(&options);
+		dialog->SetOptions(options | FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST);
+		dialog->SetTitle(to_wide(p_title).c_str());
+		const std::wstring name = to_wide(p_filter_name);
+		const std::wstring pattern = to_wide(p_pattern);
+		COMDLG_FILTERSPEC spec[2] = { { name.c_str(), pattern.c_str() }, { L"Todos los archivos", L"*.*" } };
+		dialog->SetFileTypes(2, spec);
 		if (SUCCEEDED(dialog->Show(g_hwnd))) {
 			IShellItem *item = nullptr;
 			if (SUCCEEDED(dialog->GetResult(&item))) {
