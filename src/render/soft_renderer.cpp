@@ -66,6 +66,17 @@ ImTextureID SoftRenderer::create_texture(const uint8_t *p_rgba, int p_width, int
 	return (ImTextureID)(uintptr_t)tex;
 }
 
+ImTextureID SoftRenderer::update_texture(ImTextureID p_texture, const uint32_t *p_argb, int p_width, int p_height) {
+	SoftTexture *tex = (SoftTexture *)(uintptr_t)p_texture;
+	if (!tex) {
+		tex = new SoftTexture();
+	}
+	tex->width = p_width;
+	tex->height = p_height;
+	tex->pixels.assign(p_argb, p_argb + (size_t)p_width * p_height);
+	return (ImTextureID)(uintptr_t)tex;
+}
+
 void SoftRenderer::destroy_texture(ImTextureID p_texture) {
 	delete (SoftTexture *)(uintptr_t)p_texture;
 }

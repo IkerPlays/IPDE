@@ -47,7 +47,7 @@ add_library(imgui STATIC
 	thirdparty/imgui/imgui_widgets.cpp)
 target_include_directories(imgui PUBLIC thirdparty/imgui)
 
-file(GLOB IPDE_SOURCES CONFIGURE_DEPENDS src/core/*.cpp src/render/*.cpp src/app/*.cpp)
+file(GLOB IPDE_SOURCES CONFIGURE_DEPENDS src/core/*.cpp src/render/*.cpp src/render3d/*.cpp src/app/*.cpp)
 if(WIN32)
 	list(APPEND IPDE_SOURCES src/platform/platform_win32.cpp assets/ipde.rc)
 else()

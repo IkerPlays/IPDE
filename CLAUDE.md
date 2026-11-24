@@ -13,6 +13,11 @@ don't copy Godot code). Talk to the owner in Spanish.
   `stable/vX.Y.Z` branch (created by the workflow).
 - Target platform: **Windows only** (x86_64). Linux/X11 support exists only to develop and take screenshots.
 
+## 3D engine
+
+`src/render3d` is a CPU rasterizer (Renderer3D) used by the editor viewport and the game; `src/app/scene3d.*`
+turns scene entities into draw calls. Scenes have `mode: "3d"` or `"2d"`.
+
 ## Versions
 
 - `VERSION` holds `X.Y.Z`. CMake options `IPDE_VERSION` / `IPDE_CHANNEL` override it in CI.

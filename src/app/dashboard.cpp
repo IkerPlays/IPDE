@@ -24,6 +24,7 @@ enum class Page {
 static Page g_page = Page::PROJECTS;
 static char g_search[128] = "";
 static char g_new_name[128] = "Mi juego";
+static bool g_new_3d = true;
 static char g_new_location[1024] = "";
 static std::string g_new_error;
 static char g_import_path[1024] = "";
@@ -186,6 +187,25 @@ static void draw_new_project_popup(App &p_app) {
 		ImGui::SetKeyboardFocusHere();
 	}
 	ImGui::InputText("##name", g_new_name, sizeof(g_new_name));
+	ImGui::TextUnformatted("Tipo de juego");
+	{
+		const float half = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
+		auto choice = [&](const char *p_title, const char *p_desc, bool p_value) {
+			const bool selected = g_new_3d == p_value;
+			ImGui::PushStyleColor(ImGuiCol_Button, selected ? IM_COL32(108, 123, 255, 70) : IM_COL32(38, 41, 70, 255));
+			ImGui::PushStyleColor(ImGuiCol_Border, selected ? theme::ACCENT : theme::BORDER);
+			ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.5f);
+			const std::string label = std::string(p_title) + "\n" + p_desc;
+			if (ImGui::Button(label.c_str(), ImVec2(half, 58 * s))) {
+				g_new_3d = p_value;
+			}
+			ImGui::PopStyleVar();
+			ImGui::PopStyleColor(2);
+		};
+		choice("3D", "Mundo 3D con jugador y saltos", true);
+		ImGui::SameLine();
+		choice("2D", "Escena 2D con formas y textos", false);
+	}
 	ImGui::TextUnformatted("Ubicación");
 	ImGui::SetNextItemWidth(-110 * s);
 	ImGui::InputText("##location", g_new_location, sizeof(g_new_location));
@@ -219,7 +239,7 @@ static void draw_new_project_popup(App &p_app) {
 	ImGui::BeginDisabled(!valid);
 	if (ui::accent_button("Crear y abrir", ImVec2(bw, 0)) || (valid && ImGui::IsKeyPressed(ImGuiKey_Enter))) {
 		std::string error;
-		if (Project::create(full, g_new_name, error)) {
+		if (Project::create(full, g_new_name, g_new_3d, error)) {
 			ImGui::CloseCurrentPopup();
 			p_app.open_project(full);
 		} else {

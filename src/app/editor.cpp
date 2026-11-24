@@ -1,9 +1,11 @@
-// IPDE 2D scene editor.
+// IPDE scene editor (2D and 3D).
 
 #include "app/app.h"
 #include "app/game.h"
+#include "app/scene3d.h"
 #include "core/fs.h"
 #include "platform/platform.h"
+#include "render3d/renderer3d.h"
 #include "version.h"
 
 #include <imgui_internal.h>
@@ -18,15 +20,34 @@ struct EditorState {
 	Scene scene;
 	int selected = -1;
 	bool dirty = false;
+	// 2D view.
 	ImVec2 pan = ImVec2(0, 0); // World position at the center of the viewport.
 	float zoom = 1.0f;
 	bool dragging = false;
 	ImVec2 drag_offset;
+	// 3D view (orbit camera).
+	float yaw = 35.0f;
+	float pitch = 28.0f;
+	float distance = 16.0f;
+	Vec3 target = Vec3(0, 0.5f, 0);
+	bool drag3d = false;
+	bool drag3d_vertical = false;
+	Vec3 drag3d_offset;
+	float drag3d_plane_y = 0.0f;
+	float drag3d_start_mouse_y = 0.0f;
+	float drag3d_start_y = 0.0f;
+	bool show_grid = true;
+	bool preview_animation = false;
+	double preview_start = 0.0;
+
 	bool show_close_dialog = false;
 	std::string last_export;
 };
 
 static EditorState g_ed;
+static Renderer3D g_r3d;
+static SceneRenderer3D g_scene_r3d;
+static ImTextureID g_view_tex = ImTextureID_Invalid;
 
 bool editor_has_unsaved_changes() {
 	return g_ed.dirty;
@@ -37,6 +58,8 @@ void editor_open(App &p_app) {
 	if (!Scene::load(p_app.project.get_scene_file(), g_ed.scene)) {
 		g_ed.scene = Scene(); // New empty scene.
 	}
+	meshes::clear_cache();
+	g_scene_r3d = SceneRenderer3D();
 }
 
 static uint32_t argb_from_float4(const float p_c[4]) {
@@ -49,6 +72,20 @@ static void float4_from_argb(uint32_t p_argb, float r_c[4]) {
 	r_c[1] = ((p_argb >> 8) & 0xFF) / 255.0f;
 	r_c[2] = (p_argb & 0xFF) / 255.0f;
 	r_c[3] = ((p_argb >> 24) & 0xFF) / 255.0f;
+}
+
+static bool color_edit(const char *p_label, uint32_t *p_argb, bool p_alpha = false) {
+	float c[4];
+	float4_from_argb(*p_argb, c);
+	const bool changed = p_alpha ? ImGui::ColorEdit4(p_label, c) : ImGui::ColorEdit3(p_label, c);
+	if (changed) {
+		if (!p_alpha) {
+			c[3] = 1.0f;
+		}
+		*p_argb = argb_from_float4(c);
+		g_ed.dirty = true;
+	}
+	return changed;
 }
 
 static bool save(App &p_app) {
@@ -97,23 +134,69 @@ static void export_windows(App &p_app) {
 	}
 }
 
+static Camera3D editor_camera() {
+	Camera3D cam;
+	const float yaw = g_ed.yaw * DEG2RAD;
+	const float pitch = g_ed.pitch * DEG2RAD;
+	cam.target = g_ed.target;
+	cam.position = g_ed.target + Vec3(std::sin(yaw) * std::cos(pitch), std::sin(pitch), std::cos(yaw) * std::cos(pitch)) * g_ed.distance;
+	cam.fov = g_ed.scene.camera_fov;
+	return cam;
+}
+
 static void add_entity(EntityType p_type) {
 	Entity e;
 	e.type = p_type;
-	e.x = g_ed.pan.x;
-	e.y = g_ed.pan.y;
-	switch (p_type) {
-		case EntityType::RECT:
-			e.name = "Rectángulo";
-			break;
-		case EntityType::CIRCLE:
-			e.name = "Círculo";
+	e.name = entity_type_name(p_type);
+	if (entity_type_is_3d(p_type)) {
+		e.x = g_ed.target.x;
+		e.z = g_ed.target.z;
+		e.width = e.height = e.depth = 1.0f;
+		e.y = 0.5f;
+		e.player_speed = 5.0f;
+		switch (p_type) {
+			case EntityType::PLANE:
+				e.width = e.depth = 6.0f;
+				e.y = 0.0f;
+				e.color = 0xFF5A6478;
+				break;
+			case EntityType::SPHERE:
+				e.color = 0xFF4DD6A0;
+				break;
+			case EntityType::CYLINDER:
+				e.color = 0xFF50B4FF;
+				break;
+			case EntityType::CONE:
+				e.color = 0xFFFF7896;
+				break;
+			case EntityType::TORUS:
+				e.color = 0xFFFFC53D;
+				e.rot_x = 90;
+				break;
+			case EntityType::CAPSULE:
+				e.height = 2.0f;
+				e.y = 1.0f;
+				break;
+			case EntityType::LIGHT:
+				e.y = 2.5f;
+				e.color = 0xFFFFE0B0;
+				e.solid = false;
+				break;
+			case EntityType::MODEL:
+				e.color = 0xFFDDDDDD;
+				break;
+			default:
+				break;
+		}
+	} else {
+		e.x = g_ed.pan.x;
+		e.y = g_ed.pan.y;
+		if (p_type == EntityType::CIRCLE) {
 			e.color = 0xFF4DD6A0;
-			break;
-		case EntityType::TEXT:
-			e.name = "Texto";
+		} else if (p_type == EntityType::TEXT) {
 			e.color = 0xFFFFFFFF;
-			break;
+			e.solid = false;
+		}
 	}
 	g_ed.scene.entities.push_back(e);
 	g_ed.selected = (int)g_ed.scene.entities.size() - 1;
@@ -132,12 +215,457 @@ static void duplicate_selected() {
 	if (g_ed.selected >= 0 && g_ed.selected < (int)g_ed.scene.entities.size()) {
 		Entity copy = g_ed.scene.entities[g_ed.selected];
 		copy.name += " (copia)";
-		copy.x += 24;
-		copy.y += 24;
+		if (entity_type_is_3d(copy.type)) {
+			copy.x += 1.0f;
+			copy.z += 1.0f;
+		} else {
+			copy.x += 24;
+			copy.y += 24;
+		}
 		g_ed.scene.entities.push_back(copy);
 		g_ed.selected = (int)g_ed.scene.entities.size() - 1;
 		g_ed.dirty = true;
 	}
+}
+
+static void focus_selected() {
+	if (g_ed.selected >= 0 && g_ed.selected < (int)g_ed.scene.entities.size()) {
+		const Entity &e = g_ed.scene.entities[g_ed.selected];
+		if (g_ed.scene.is_3d) {
+			g_ed.target = Vec3(e.x, e.y, e.z);
+			g_ed.distance = std::max(3.0f, std::max(e.width, std::max(e.height, e.depth)) * 3.0f);
+		} else {
+			g_ed.pan = ImVec2(e.x, e.y);
+		}
+	}
+}
+
+static void draw_scene_panel(App &p_app, float p_width) {
+	const float s = p_app.scale();
+	ImGui::BeginChild("ScenePanel", ImVec2(p_width, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
+	ImGui::TextUnformatted(g_ed.scene.is_3d ? "ESCENA 3D" : "ESCENA 2D");
+	ImGui::Separator();
+	if (ui::accent_button("+  Añadir", ImVec2(-1, 0))) {
+		ImGui::OpenPopup("AddMenu");
+	}
+	if (ImGui::BeginPopup("AddMenu")) {
+		if (g_ed.scene.is_3d) {
+			const EntityType types[] = { EntityType::CUBE, EntityType::SPHERE, EntityType::PLANE, EntityType::CYLINDER, EntityType::CONE, EntityType::TORUS, EntityType::CAPSULE, EntityType::MODEL, EntityType::LIGHT };
+			for (EntityType t : types) {
+				if (t == EntityType::MODEL || t == EntityType::LIGHT) {
+					ImGui::Separator();
+				}
+				if (ImGui::MenuItem(t == EntityType::MODEL ? "Modelo (.obj)" : (t == EntityType::LIGHT ? "Luz puntual" : entity_type_name(t)))) {
+					add_entity(t);
+				}
+			}
+		} else {
+			const EntityType types[] = { EntityType::RECT, EntityType::CIRCLE, EntityType::TEXT };
+			for (EntityType t : types) {
+				if (ImGui::MenuItem(entity_type_name(t))) {
+					add_entity(t);
+				}
+			}
+		}
+		ImGui::EndPopup();
+	}
+	ImGui::Spacing();
+	ImGui::BeginChild("EntityList", ImVec2(0, -48 * s), ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground);
+	for (int i = 0; i < (int)g_ed.scene.entities.size(); i++) {
+		const Entity &e = g_ed.scene.entities[i];
+		ImGui::PushID(i);
+		std::string prefix;
+		if (e.player) {
+			prefix = "[J] ";
+		} else if (e.collectible) {
+			prefix = "[+] ";
+		}
+		const std::string label = prefix + e.name + "##e";
+		if (!e.visible) {
+			ImGui::PushStyleColor(ImGuiCol_Text, theme::TEXT_DIM);
+		}
+		if (ImGui::Selectable(label.c_str(), g_ed.selected == i)) {
+			g_ed.selected = i;
+		}
+		if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
+			g_ed.selected = i;
+			focus_selected();
+		}
+		if (!e.visible) {
+			ImGui::PopStyleColor();
+		}
+		const char *type_name = entity_type_name(e.type);
+		ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - ImGui::CalcTextSize(type_name).x);
+		ImGui::TextDisabled("%s", type_name);
+		ImGui::PopID();
+	}
+	ImGui::EndChild();
+	ImGui::Separator();
+	ImGui::BeginDisabled(g_ed.selected < 0);
+	if (ImGui::Button("Duplicar", ImVec2((ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f, 0))) {
+		duplicate_selected();
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Eliminar", ImVec2(-1, 0))) {
+		delete_selected();
+	}
+	ImGui::EndDisabled();
+	ImGui::EndChild();
+}
+
+static void draw_viewport_3d(App &p_app, float p_width) {
+	const float s = p_app.scale();
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+	ImGui::BeginChild("Viewport3D", ImVec2(p_width, 0), ImGuiChildFlags_Borders);
+	const ImVec2 pos = ImGui::GetCursorScreenPos();
+	const ImVec2 size = ImGui::GetContentRegionAvail();
+	const int w = std::max(16, (int)size.x);
+	const int h = std::max(16, (int)size.y);
+	ImGui::InvisibleButton("canvas3d", size, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight | ImGuiButtonFlags_MouseButtonMiddle);
+	const bool hovered = ImGui::IsItemHovered();
+	ImGuiIO &io = ImGui::GetIO();
+	const float mx = io.MousePos.x - pos.x;
+	const float my = io.MousePos.y - pos.y;
+
+	// Camera controls: right drag orbits, middle drag (or Shift + right) pans, wheel zooms.
+	if (hovered && io.MouseWheel != 0.0f) {
+		g_ed.distance = std::clamp(g_ed.distance * (io.MouseWheel > 0 ? 0.88f : 1.0f / 0.88f), 0.5f, 400.0f);
+	}
+	const bool panning = ImGui::IsItemActive() && (ImGui::IsMouseDragging(ImGuiMouseButton_Middle) || (io.KeyShift && ImGui::IsMouseDragging(ImGuiMouseButton_Right)));
+	if (panning) {
+		const Camera3D cam = editor_camera();
+		const Vec3 fwd = (cam.target - cam.position).normalized();
+		const Vec3 right = cross(fwd, Vec3(0, 1, 0)).normalized();
+		const Vec3 up = cross(right, fwd);
+		const float k = g_ed.distance * 0.0016f;
+		g_ed.target = g_ed.target - right * (io.MouseDelta.x * k) + up * (io.MouseDelta.y * k);
+	} else if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
+		g_ed.yaw -= io.MouseDelta.x * 0.35f;
+		g_ed.pitch = std::clamp(g_ed.pitch + io.MouseDelta.y * 0.35f, -89.0f, 89.0f);
+	}
+
+	// Render the scene.
+	g_r3d.resize(w, h);
+	const Camera3D cam = editor_camera();
+	const double t = g_ed.preview_animation ? platform::get_time() - g_ed.preview_start : 0.0;
+	g_r3d.begin(cam, SceneRenderer3D::make_environment(g_ed.scene), SceneRenderer3D::make_lights(g_ed.scene, t, g_ed.preview_animation));
+	g_scene_r3d.draw(g_r3d, g_ed.scene, p_app.project.path, t, g_ed.preview_animation, true);
+	if (g_ed.show_grid) {
+		for (int i = -20; i <= 20; i++) {
+			const uint32_t c = i == 0 ? 0x00000000 : (i % 5 == 0 ? 0x40FFFFFF : 0x22FFFFFF);
+			if (c) {
+				g_r3d.draw_line(Vec3((float)i, 0.002f, -20), Vec3((float)i, 0.002f, 20), c);
+				g_r3d.draw_line(Vec3(-20, 0.002f, (float)i), Vec3(20, 0.002f, (float)i), c);
+			}
+		}
+		g_r3d.draw_line(Vec3(-20, 0.003f, 0), Vec3(20, 0.003f, 0), 0xC0FF5A5A);
+		g_r3d.draw_line(Vec3(0, 0.003f, -20), Vec3(0, 0.003f, 20), 0xC05A8CFF);
+		g_r3d.draw_line(Vec3(0, 0, 0), Vec3(0, 2, 0), 0xC05AFF8C);
+	}
+	// Selection: bounding box and axes.
+	if (g_ed.selected >= 0 && g_ed.selected < (int)g_ed.scene.entities.size()) {
+		const Entity &e = g_ed.scene.entities[g_ed.selected];
+		if (entity_type_is_3d(e.type)) {
+			const Mat4 m = SceneRenderer3D::entity_transform(e, t, g_ed.preview_animation);
+			auto mesh = g_scene_r3d.get_mesh(e, p_app.project.path);
+			const Vec3 mn = mesh->aabb_min, mxv = mesh->aabb_max;
+			Vec3 c[8];
+			for (int i = 0; i < 8; i++) {
+				c[i] = m.transform_point(Vec3(i & 1 ? mxv.x : mn.x, i & 2 ? mxv.y : mn.y, i & 4 ? mxv.z : mn.z));
+			}
+			const int edges[12][2] = { { 0, 1 }, { 2, 3 }, { 4, 5 }, { 6, 7 }, { 0, 2 }, { 1, 3 }, { 4, 6 }, { 5, 7 }, { 0, 4 }, { 1, 5 }, { 2, 6 }, { 3, 7 } };
+			for (const auto &ed : edges) {
+				g_r3d.draw_line(c[ed[0]], c[ed[1]], 0xFF8C9BFF, false);
+			}
+			const Vec3 p(e.x, e.y, e.z);
+			g_r3d.draw_line(p, p + Vec3(1.2f, 0, 0), 0xFFFF5A5A, false);
+			g_r3d.draw_line(p, p + Vec3(0, 1.2f, 0), 0xFF5AFF8C, false);
+			g_r3d.draw_line(p, p + Vec3(0, 0, 1.2f), 0xFF5A8CFF, false);
+			if (e.type == EntityType::LIGHT) {
+				for (int i = 0; i < 48; i++) {
+					const float a0 = i / 48.0f * 2 * PI, a1 = (i + 1) / 48.0f * 2 * PI;
+					g_r3d.draw_line(p + Vec3(std::cos(a0), 0, std::sin(a0)) * e.light_range, p + Vec3(std::cos(a1), 0, std::sin(a1)) * e.light_range, 0x80FFE0B0);
+				}
+			}
+		}
+	}
+	g_r3d.end();
+
+	// Selection and dragging (after rendering so the ID buffer is up to date).
+	if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+		const uint32_t id = g_r3d.pick((int)mx, (int)my);
+		const int prev = g_ed.selected;
+		g_ed.selected = id ? (int)id - 1 : -1;
+		g_ed.drag3d = false;
+		if (g_ed.selected >= 0 && g_ed.selected == prev) {
+			// Drag the already selected entity: on the ground plane, or vertically with Shift.
+			const Entity &e = g_ed.scene.entities[g_ed.selected];
+			g_ed.drag3d = true;
+			g_ed.drag3d_vertical = io.KeyShift;
+			g_ed.drag3d_plane_y = e.y;
+			g_ed.drag3d_start_mouse_y = my;
+			g_ed.drag3d_start_y = e.y;
+			Vec3 o, d;
+			g_r3d.screen_ray(mx, my, o, d);
+			if (std::fabs(d.y) > 1e-4f) {
+				const float tt = (g_ed.drag3d_plane_y - o.y) / d.y;
+				const Vec3 hit = o + d * tt;
+				g_ed.drag3d_offset = Vec3(e.x, e.y, e.z) - hit;
+			}
+		}
+	}
+	if (g_ed.drag3d) {
+		if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && g_ed.selected >= 0) {
+			Entity &e = g_ed.scene.entities[g_ed.selected];
+			if (g_ed.drag3d_vertical) {
+				const float ny = g_ed.drag3d_start_y - (my - g_ed.drag3d_start_mouse_y) * g_ed.distance * 0.0025f;
+				if (ny != e.y) {
+					e.y = io.KeyCtrl ? std::round(ny * 4.0f) / 4.0f : ny;
+					g_ed.dirty = true;
+				}
+			} else {
+				Vec3 o, d;
+				g_r3d.screen_ray(mx, my, o, d);
+				if (std::fabs(d.y) > 1e-4f) {
+					const float tt = (g_ed.drag3d_plane_y - o.y) / d.y;
+					if (tt > 0) {
+						const Vec3 hit = o + d * tt + g_ed.drag3d_offset;
+						float nx = hit.x, nz = hit.z;
+						if (io.KeyCtrl) {
+							nx = std::round(nx * 2.0f) / 2.0f;
+							nz = std::round(nz * 2.0f) / 2.0f;
+						}
+						if (nx != e.x || nz != e.z) {
+							e.x = nx;
+							e.z = nz;
+							g_ed.dirty = true;
+						}
+					}
+				}
+			}
+		} else {
+			g_ed.drag3d = false;
+		}
+	}
+
+	g_view_tex = p_app.renderer.update_texture(g_view_tex, g_r3d.get_pixels(), g_r3d.get_width(), g_r3d.get_height());
+	ImDrawList *dl = ImGui::GetWindowDrawList();
+	dl->AddImage(ImTextureRef(g_view_tex), pos, ImVec2(pos.x + w, pos.y + h));
+
+	// Overlay: help and view options.
+	char info[200];
+	snprintf(info, sizeof(info), "%zu triángulos   ·   Clic: seleccionar   ·   Arrastrar: mover (Mayús: altura, Ctrl: ajustar)   ·   Botón dcho: girar   ·   Rueda: zoom   ·   F: enfocar", g_r3d.get_triangle_count());
+	dl->AddText(ImVec2(pos.x + 11 * s, pos.y + size.y - 27 * s), IM_COL32(0, 0, 0, 120), info);
+	dl->AddText(ImVec2(pos.x + 10 * s, pos.y + size.y - 28 * s), IM_COL32(255, 255, 255, 200), info);
+	ImGui::SetCursorScreenPos(ImVec2(pos.x + 10 * s, pos.y + 10 * s));
+	ImGui::PushStyleColor(ImGuiCol_FrameBg, IM_COL32(16, 17, 31, 190));
+	if (ImGui::Checkbox("Cuadrícula", &g_ed.show_grid)) {
+	}
+	ImGui::SameLine();
+	if (ImGui::Checkbox("Animar", &g_ed.preview_animation)) {
+		g_ed.preview_start = platform::get_time();
+	}
+	ImGui::PopStyleColor();
+	ImGui::EndChild();
+	ImGui::PopStyleVar();
+}
+
+static bool drag_float(const char *p_label, float *p_value, float p_speed, float p_min = 0, float p_max = 0, const char *p_fmt = "%.1f") {
+	const bool changed = ImGui::DragFloat(p_label, p_value, p_speed, p_min, p_max, p_fmt);
+	if (changed) {
+		g_ed.dirty = true;
+	}
+	return changed;
+}
+
+static bool checkbox(const char *p_label, bool *p_value) {
+	const bool changed = ImGui::Checkbox(p_label, p_value);
+	if (changed) {
+		g_ed.dirty = true;
+	}
+	return changed;
+}
+
+static bool text_field(const char *p_label, std::string &r_value) {
+	char buf[512];
+	strncpy(buf, r_value.c_str(), sizeof(buf) - 1);
+	buf[sizeof(buf) - 1] = 0;
+	if (ImGui::InputText(p_label, buf, sizeof(buf))) {
+		r_value = buf;
+		g_ed.dirty = true;
+		return true;
+	}
+	return false;
+}
+
+static void draw_environment(App &p_app) {
+	Scene &sc = g_ed.scene;
+	if (!sc.is_3d) {
+		ImGui::SeparatorText("Escena");
+		color_edit("Fondo", &sc.background);
+		ui::dim_text("Selecciona una entidad para editarla.");
+		return;
+	}
+	Environment &env = sc.environment;
+	ImGui::SeparatorText("Cielo");
+	color_edit("Cielo", &env.sky_top);
+	color_edit("Horizonte", &env.sky_horizon);
+	color_edit("Suelo lejano", &env.ground);
+	drag_float("Ambiente", &env.ambient, 0.01f, 0, 3, "%.2f");
+	ImGui::SeparatorText("Sol");
+	drag_float("Altura", &env.sun_pitch, 0.5f, 1, 90, "%.0f°");
+	drag_float("Dirección", &env.sun_yaw, 0.5f, -360, 360, "%.0f°");
+	color_edit("Color del sol", &env.sun_color);
+	drag_float("Intensidad", &env.sun_energy, 0.01f, 0, 10, "%.2f");
+	checkbox("Sombras", &env.shadows);
+	ImGui::SeparatorText("Niebla");
+	checkbox("Activar niebla", &env.fog);
+	if (env.fog) {
+		drag_float("Inicio", &env.fog_start, 0.5f, 0, 1000, "%.0f m");
+		drag_float("Fin", &env.fog_end, 0.5f, 1, 2000, "%.0f m");
+	}
+	ImGui::SeparatorText("Cámara del juego");
+	drag_float("Campo de visión", &sc.camera_fov, 0.2f, 20, 120, "%.0f°");
+	ui::dim_text("Se usa si ninguna entidad tiene \"La cámara lo sigue\".");
+	if (ImGui::Button("Usar la vista actual", ImVec2(-1, 0))) {
+		const Camera3D cam = editor_camera();
+		sc.camera_x = cam.position.x;
+		sc.camera_y = cam.position.y;
+		sc.camera_z = cam.position.z;
+		sc.camera_target_x = cam.target.x;
+		sc.camera_target_y = cam.target.y;
+		sc.camera_target_z = cam.target.z;
+		g_ed.dirty = true;
+		p_app.toast("Cámara del juego actualizada.");
+	}
+}
+
+static void draw_inspector(App &p_app) {
+	ImGui::BeginChild("Inspector", ImVec2(0, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
+	ImGui::PushItemWidth(-100 * p_app.scale());
+	if (g_ed.selected < 0 || g_ed.selected >= (int)g_ed.scene.entities.size()) {
+		ImGui::TextUnformatted(g_ed.scene.is_3d ? "ENTORNO" : "INSPECTOR");
+		ImGui::Separator();
+		draw_environment(p_app);
+		ImGui::PopItemWidth();
+		ImGui::EndChild();
+		return;
+	}
+	ImGui::TextUnformatted("INSPECTOR");
+	ImGui::Separator();
+	Entity &e = g_ed.scene.entities[g_ed.selected];
+	const bool is3d = entity_type_is_3d(e.type);
+	text_field("Nombre", e.name);
+	ImGui::TextDisabled("Tipo: %s", entity_type_name(e.type));
+	checkbox("Visible", &e.visible);
+
+	ImGui::SeparatorText("Transformación");
+	if (is3d) {
+		float p[3] = { e.x, e.y, e.z };
+		if (ImGui::DragFloat3("Posición", p, 0.05f, 0, 0, "%.2f")) {
+			e.x = p[0];
+			e.y = p[1];
+			e.z = p[2];
+			g_ed.dirty = true;
+		}
+		if (e.type != EntityType::LIGHT) {
+			float r[3] = { e.rot_x, e.rot_y, e.rotation };
+			if (ImGui::DragFloat3("Rotación", r, 0.5f, 0, 0, "%.0f°")) {
+				e.rot_x = r[0];
+				e.rot_y = r[1];
+				e.rotation = r[2];
+				g_ed.dirty = true;
+			}
+			if (e.type == EntityType::SPHERE) {
+				drag_float("Diámetro", &e.width, 0.02f, 0.01f, 1000, "%.2f");
+			} else {
+				float sz[3] = { e.width, e.height, e.depth };
+				if (ImGui::DragFloat3("Tamaño", sz, 0.02f, 0.01f, 1000, "%.2f")) {
+					e.width = std::max(0.01f, sz[0]);
+					e.height = std::max(0.01f, sz[1]);
+					e.depth = std::max(0.01f, sz[2]);
+					g_ed.dirty = true;
+				}
+			}
+		}
+	} else {
+		float posv[2] = { e.x, e.y };
+		if (ImGui::DragFloat2("Posición", posv, 1.0f, 0, 0, "%.0f")) {
+			e.x = posv[0];
+			e.y = posv[1];
+			g_ed.dirty = true;
+		}
+		if (e.type == EntityType::RECT) {
+			float sz[2] = { e.width, e.height };
+			if (ImGui::DragFloat2("Tamaño", sz, 1.0f, 1.0f, 10000.0f, "%.0f")) {
+				e.width = std::max(1.0f, sz[0]);
+				e.height = std::max(1.0f, sz[1]);
+				g_ed.dirty = true;
+			}
+		} else if (e.type == EntityType::CIRCLE) {
+			drag_float("Diámetro", &e.width, 1.0f, 1.0f, 10000.0f, "%.0f");
+		} else {
+			text_field("Texto", e.text);
+			drag_float("Tamaño", &e.text_size, 0.5f, 4.0f, 400.0f, "%.0f");
+		}
+		if (e.type != EntityType::TEXT) {
+			drag_float("Rotación", &e.rotation, 0.5f, 0, 0, "%.0f°");
+		}
+	}
+
+	ImGui::SeparatorText(e.type == EntityType::LIGHT ? "Luz" : "Material");
+	color_edit("Color", &e.color, !is3d);
+	if (e.type == EntityType::LIGHT) {
+		drag_float("Energía", &e.light_energy, 0.02f, 0, 50, "%.2f");
+		drag_float("Alcance", &e.light_range, 0.05f, 0.1f, 200, "%.1f m");
+	} else if (is3d) {
+		ImGui::SliderFloat("Rugosidad", &e.roughness, 0.0f, 1.0f, "%.2f");
+		if (ImGui::IsItemEdited()) {
+			g_ed.dirty = true;
+		}
+		ImGui::SliderFloat("Metálico", &e.metallic, 0.0f, 1.0f, "%.2f");
+		if (ImGui::IsItemEdited()) {
+			g_ed.dirty = true;
+		}
+		drag_float("Brillo propio", &e.emission, 0.02f, 0, 20, "%.2f");
+		text_field("Textura (PNG)", e.texture);
+		if (!e.texture.empty()) {
+			drag_float("Escala UV", &e.uv_scale, 0.02f, 0.01f, 100, "%.2f");
+		}
+		if (e.type == EntityType::MODEL) {
+			text_field("Modelo (.obj)", e.model);
+			std::string err;
+			if (!e.model.empty() && !meshes::load_obj(fs::join(p_app.project.path, e.model), &err)) {
+				ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(theme::DANGER), "No se pudo cargar el modelo.");
+			}
+			ui::dim_text("Ruta relativa a la carpeta del proyecto, por ejemplo: modelos/casa.obj");
+		}
+	}
+
+	if (e.type != EntityType::LIGHT) {
+		ImGui::SeparatorText("Comportamientos");
+		drag_float("Girar", &e.spin_speed, 1.0f, -3600, 3600, "%.0f °/s");
+		drag_float("Flotar", &e.bob_amplitude, is3d ? 0.01f : 0.5f, 0, 1000, is3d ? "%.2f m" : "%.0f px");
+		if (e.bob_amplitude != 0.0f) {
+			drag_float("Frecuencia", &e.bob_frequency, 0.01f, 0, 20, "%.2f Hz");
+		}
+		checkbox("Sólido", &e.solid);
+		checkbox("Coleccionable", &e.collectible);
+		checkbox("Controlado por el jugador", &e.player);
+		if (e.player) {
+			drag_float("Velocidad", &e.player_speed, is3d ? 0.05f : 1.0f, 0, 5000, is3d ? "%.1f m/s" : "%.0f px/s");
+			if (is3d) {
+				checkbox("Puede saltar (Espacio)", &e.can_jump);
+				if (e.can_jump) {
+					drag_float("Fuerza de salto", &e.jump_force, 0.05f, 0, 100, "%.1f");
+				}
+			}
+			ui::dim_text(is3d ? "Se mueve con WASD o las flechas, salta con Espacio y choca con lo sólido." : "Se mueve con WASD o las flechas y choca con las formas sólidas.");
+		}
+		checkbox("La cámara lo sigue", &e.camera_follow);
+	}
+	ImGui::PopItemWidth();
+	ImGui::EndChild();
 }
 
 static bool hit_test(const Entity &p_e, float p_wx, float p_wy) {
@@ -201,59 +729,7 @@ static void draw_toolbar(App &p_app) {
 	ImGui::PopStyleColor();
 }
 
-static void draw_scene_panel(App &p_app, float p_width) {
-	const float s = p_app.scale();
-	ImGui::BeginChild("ScenePanel", ImVec2(p_width, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
-	ImGui::TextUnformatted("ESCENA");
-	ImGui::Separator();
-	const float bw = (ImGui::GetContentRegionAvail().x - 2 * ImGui::GetStyle().ItemSpacing.x) / 3.0f;
-	if (ImGui::Button("+ Rect", ImVec2(bw, 0))) {
-		add_entity(EntityType::RECT);
-	}
-	ImGui::SameLine();
-	if (ImGui::Button("+ Círculo", ImVec2(bw, 0))) {
-		add_entity(EntityType::CIRCLE);
-	}
-	ImGui::SameLine();
-	if (ImGui::Button("+ Texto", ImVec2(bw, 0))) {
-		add_entity(EntityType::TEXT);
-	}
-	ImGui::Spacing();
-	ImGui::BeginChild("EntityList", ImVec2(0, -84 * s), ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground);
-	for (int i = 0; i < (int)g_ed.scene.entities.size(); i++) {
-		const Entity &e = g_ed.scene.entities[i];
-		ImGui::PushID(i);
-		const std::string label = std::string(e.player ? "[J] " : "") + e.name + "##e";
-		if (ImGui::Selectable(label.c_str(), g_ed.selected == i)) {
-			g_ed.selected = i;
-		}
-		const char *type_name = entity_type_name(e.type);
-		ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - ImGui::CalcTextSize(type_name).x);
-		ImGui::TextDisabled("%s", type_name);
-		ImGui::PopID();
-	}
-	ImGui::EndChild();
-	ImGui::Separator();
-	ImGui::BeginDisabled(g_ed.selected < 0);
-	if (ImGui::Button("Duplicar", ImVec2((ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f, 0))) {
-		duplicate_selected();
-	}
-	ImGui::SameLine();
-	if (ImGui::Button("Eliminar", ImVec2(-1, 0))) {
-		delete_selected();
-	}
-	ImGui::EndDisabled();
-	float bg[4];
-	float4_from_argb(g_ed.scene.background, bg);
-	if (ImGui::ColorEdit3("Fondo", bg, ImGuiColorEditFlags_NoInputs)) {
-		bg[3] = 1.0f;
-		g_ed.scene.background = argb_from_float4(bg);
-		g_ed.dirty = true;
-	}
-	ImGui::EndChild();
-}
-
-static void draw_viewport(App &p_app, float p_width) {
+static void draw_viewport_2d(App &p_app, float p_width) {
 	const float s = p_app.scale();
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 	ImGui::BeginChild("Viewport", ImVec2(p_width, 0), ImGuiChildFlags_Borders);
@@ -364,93 +840,6 @@ static void draw_viewport(App &p_app, float p_width) {
 	ImGui::PopStyleVar();
 }
 
-static bool drag_float(const char *p_label, float *p_value, float p_speed, float p_min = 0, float p_max = 0, const char *p_fmt = "%.1f") {
-	const bool changed = ImGui::DragFloat(p_label, p_value, p_speed, p_min, p_max, p_fmt);
-	if (changed) {
-		g_ed.dirty = true;
-	}
-	return changed;
-}
-
-static void draw_inspector(App &p_app) {
-	ImGui::BeginChild("Inspector", ImVec2(0, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
-	ImGui::TextUnformatted("INSPECTOR");
-	ImGui::Separator();
-	if (g_ed.selected < 0 || g_ed.selected >= (int)g_ed.scene.entities.size()) {
-		ui::dim_text("Selecciona una entidad en la escena o en el visor para editarla.");
-		ImGui::EndChild();
-		return;
-	}
-	Entity &e = g_ed.scene.entities[g_ed.selected];
-	ImGui::PushItemWidth(-90 * p_app.scale());
-	char name[128];
-	strncpy(name, e.name.c_str(), sizeof(name) - 1);
-	name[sizeof(name) - 1] = 0;
-	if (ImGui::InputText("Nombre", name, sizeof(name))) {
-		e.name = name;
-		g_ed.dirty = true;
-	}
-	ImGui::TextDisabled("Tipo: %s", entity_type_name(e.type));
-	if (ImGui::Checkbox("Visible", &e.visible)) {
-		g_ed.dirty = true;
-	}
-
-	ImGui::SeparatorText("Transformación");
-	float posv[2] = { e.x, e.y };
-	if (ImGui::DragFloat2("Posición", posv, 1.0f, 0, 0, "%.0f")) {
-		e.x = posv[0];
-		e.y = posv[1];
-		g_ed.dirty = true;
-	}
-	if (e.type == EntityType::RECT) {
-		float sz[2] = { e.width, e.height };
-		if (ImGui::DragFloat2("Tamaño", sz, 1.0f, 1.0f, 10000.0f, "%.0f")) {
-			e.width = std::max(1.0f, sz[0]);
-			e.height = std::max(1.0f, sz[1]);
-			g_ed.dirty = true;
-		}
-	} else if (e.type == EntityType::CIRCLE) {
-		drag_float("Diámetro", &e.width, 1.0f, 1.0f, 10000.0f, "%.0f");
-	} else {
-		char text[256];
-		strncpy(text, e.text.c_str(), sizeof(text) - 1);
-		text[sizeof(text) - 1] = 0;
-		if (ImGui::InputText("Texto", text, sizeof(text))) {
-			e.text = text;
-			g_ed.dirty = true;
-		}
-		drag_float("Tamaño", &e.text_size, 0.5f, 4.0f, 400.0f, "%.0f");
-	}
-	if (e.type != EntityType::TEXT) {
-		drag_float("Rotación", &e.rotation, 0.5f, 0, 0, "%.0f°");
-	}
-	float col[4];
-	float4_from_argb(e.color, col);
-	if (ImGui::ColorEdit4("Color", col)) {
-		e.color = argb_from_float4(col);
-		g_ed.dirty = true;
-	}
-
-	ImGui::SeparatorText("Comportamientos");
-	drag_float("Girar", &e.spin_speed, 1.0f, -3600, 3600, "%.0f °/s");
-	drag_float("Flotar", &e.bob_amplitude, 0.5f, 0, 1000, "%.0f px");
-	if (e.bob_amplitude != 0.0f) {
-		drag_float("Frecuencia", &e.bob_frequency, 0.01f, 0, 20, "%.2f Hz");
-	}
-	if (ImGui::Checkbox("Controlado por el jugador", &e.player)) {
-		g_ed.dirty = true;
-	}
-	if (e.player) {
-		drag_float("Velocidad", &e.player_speed, 1.0f, 0, 5000, "%.0f px/s");
-		ui::dim_text("Se mueve con WASD o las flechas y choca con las formas sólidas.");
-	}
-	if (ImGui::Checkbox("La cámara lo sigue", &e.camera_follow)) {
-		g_ed.dirty = true;
-	}
-	ImGui::PopItemWidth();
-	ImGui::EndChild();
-}
-
 static void draw_close_dialog(App &p_app) {
 	if (g_ed.show_close_dialog) {
 		ImGui::OpenPopup("Cambios sin guardar");
@@ -506,19 +895,27 @@ void draw_editor(App &p_app) {
 	if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D, false)) {
 		duplicate_selected();
 	}
+	if (!io.WantTextInput && !io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_F, false)) {
+		focus_selected();
+	}
 
 	draw_toolbar(p_app);
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12 * s, 12 * s));
 	ImGui::SetCursorPos(ImVec2(8 * s, ImGui::GetCursorPosY() + 8 * s));
 	ImGui::BeginGroup();
 	const float total = ImGui::GetContentRegionAvail().x - 8 * s;
-	const float left = 260 * s;
-	const float right = 320 * s;
+	const float left = 250 * s;
+	const float right = 330 * s;
 	const float gap = ImGui::GetStyle().ItemSpacing.x;
 	ImGui::BeginChild("EditorBody", ImVec2(total, ImGui::GetContentRegionAvail().y - 8 * s), ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground);
 	draw_scene_panel(p_app, left);
 	ImGui::SameLine();
-	draw_viewport(p_app, std::max(200.0f, total - left - right - gap * 2));
+	const float view_w = std::max(200.0f, total - left - right - gap * 2);
+	if (g_ed.scene.is_3d) {
+		draw_viewport_3d(p_app, view_w);
+	} else {
+		draw_viewport_2d(p_app, view_w);
+	}
 	ImGui::SameLine();
 	draw_inspector(p_app);
 	ImGui::EndChild();

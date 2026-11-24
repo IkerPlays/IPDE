@@ -7,6 +7,9 @@
 - **Plataforma:** Windows (x86_64). Un único `IPDE.exe`, sin instalador ni dependencias.
 - **Renderizador propio por software:** funciona en cualquier PC, sin depender de drivers de GPU.
 - **Panel de proyectos:** crear, importar y abrir proyectos.
+- **Motor 3D propio:** rasterizador por software multihilo con buffer de profundidad, luz de sol con sombras, luces puntuales, materiales (rugosidad, metal, emisión, texturas PNG), niebla, cielo y tonemapping. Primitivas (cubo, esfera, plano, cilindro, cono, toro, cápsula) y modelos `.obj`.
+- **Editor 3D:** cámara orbital, selección con clic, mover objetos arrastrando, panel de entorno (cielo, sol, sombras, niebla).
+- **Juego 3D:** jugador en tercera persona (WASD, salto, colisiones), monedas coleccionables y HUD.
 - **Editor 2D:** escena con rectángulos, círculos y textos, visor con zoom y cuadrícula, inspector y comportamientos (girar, flotar, jugador con WASD y colisiones, cámara que sigue).
 - **Ejecutar (F5)** y **exportar a Windows** (`.exe` + carpeta `data`).
 - **Actualizador integrado:** descarga e instala las versiones nuevas solo; desde **Versiones** puedes instalar cualquier versión (stable, devbuild o anteriores).
@@ -38,7 +41,8 @@ Para publicar: **Actions → 🚀 IPDE Release → Run workflow** (versión y ca
 | Carpeta | Contenido |
 |---|---|
 | `src/platform` | Ventana, entrada y sistema (Win32; X11 solo para desarrollo) |
-| `src/render` | Renderizador por software |
+| `src/render` | Renderizador por software de la interfaz |
+| `src/render3d` | Motor 3D: matemáticas, mallas y rasterizador |
 | `src/core` | JSON, HTTP y archivos |
 | `src/app` | Panel de proyectos, editor, juego y actualizador |
 | `assets` | Logo, icono y fuente |
