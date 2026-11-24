@@ -37,6 +37,10 @@ struct EditorState {
 	float drag3d_plane_y = 0.0f;
 	float drag3d_start_mouse_y = 0.0f;
 	float drag3d_start_y = 0.0f;
+	// Move gizmo (axis arrows).
+	int gizmo_axis = -1; // Axis being dragged (0 = X, 1 = Y, 2 = Z).
+	Vec3 gizmo_start_pos;
+	ImVec2 gizmo_start_mouse;
 	bool show_grid = true;
 	bool preview_animation = false;
 	double preview_start = 0.0;
@@ -308,6 +312,33 @@ static void delete_selected() {
 	}
 }
 
+static std::vector<Entity> g_clipboard;
+
+static void copy_selected() {
+	if (g_ed.selected >= 0 && g_ed.selected < (int)g_ed.scene.entities.size()) {
+		g_clipboard = { g_ed.scene.entities[g_ed.selected] };
+	}
+}
+
+static void paste_clipboard() {
+	for (Entity copy : g_clipboard) {
+		if (entity_type_is_3d(copy.type) != g_ed.scene.is_3d && copy.type != EntityType::TEXT) {
+			continue; // 3D objects can't go into 2D scenes and vice versa.
+		}
+		if (entity_type_is_3d(copy.type)) {
+			copy.x += 1.0f;
+			copy.z += 1.0f;
+		} else {
+			copy.x += 24;
+			copy.y += 24;
+		}
+		g_clipboard = { copy }; // Pasting again keeps offsetting.
+		g_ed.scene.entities.push_back(copy);
+		g_ed.selected = (int)g_ed.scene.entities.size() - 1;
+		g_ed.dirty = true;
+	}
+}
+
 static void duplicate_selected() {
 	if (g_ed.selected >= 0 && g_ed.selected < (int)g_ed.scene.entities.size()) {
 		Entity copy = g_ed.scene.entities[g_ed.selected];
@@ -481,9 +512,6 @@ static void draw_viewport_3d(App &p_app, float p_width) {
 				g_r3d.draw_line(c[ed[0]], c[ed[1]], 0xFF8C9BFF, false);
 			}
 			const Vec3 p(e.x, e.y, e.z);
-			g_r3d.draw_line(p, p + Vec3(1.2f, 0, 0), 0xFFFF5A5A, false);
-			g_r3d.draw_line(p, p + Vec3(0, 1.2f, 0), 0xFF5AFF8C, false);
-			g_r3d.draw_line(p, p + Vec3(0, 0, 1.2f), 0xFF5A8CFF, false);
 			if (e.has_motion()) { // Path of a moving platform and its end position.
 				const Vec3 end = p + Vec3(e.move_x, e.move_y, e.move_z);
 				g_r3d.draw_line(p, end, 0xFFFFC53D, false);
@@ -512,8 +540,71 @@ static void draw_viewport_3d(App &p_app, float p_width) {
 	}
 	g_r3d.end();
 
+	// Gizmo geometry (screen space) for the selected 3D entity.
+	bool gizmo_visible = false;
+	ImVec2 gizmo_origin, gizmo_end[3];
+	int gizmo_hover = -1;
+	float gizmo_len = 1.0f;
+	if (g_ed.selected >= 0 && g_ed.selected < (int)g_ed.scene.entities.size() && entity_type_is_3d(g_ed.scene.entities[g_ed.selected].type)) {
+		const Entity &e = g_ed.scene.entities[g_ed.selected];
+		const Vec3 p(e.x, e.y, e.z);
+		// Constant size on screen: proportional to the distance to the camera.
+		gizmo_len = std::max(0.05f, (p - cam.position).length() * 0.16f * std::tan(cam.fov * DEG2RAD * 0.5f) / std::tan(30.0f * DEG2RAD));
+		float ox, oy;
+		gizmo_visible = g_r3d.world_to_screen(p, ox, oy);
+		gizmo_origin = ImVec2(ox, oy);
+		const Vec3 axes[3] = { Vec3(1, 0, 0), Vec3(0, 1, 0), Vec3(0, 0, 1) };
+		float best = 8.0f * s;
+		for (int k = 0; k < 3 && gizmo_visible; k++) {
+			float ex, ey;
+			gizmo_visible = g_r3d.world_to_screen(p + axes[k] * gizmo_len, ex, ey);
+			gizmo_end[k] = ImVec2(ex, ey);
+			// Distance from the mouse to the arrow.
+			const float vx = ex - ox, vy = ey - oy;
+			const float len2 = vx * vx + vy * vy;
+			if (len2 < 1.0f) {
+				continue;
+			}
+			const float tt = std::clamp(((mx - ox) * vx + (my - oy) * vy) / len2, 0.0f, 1.0f);
+			const float dx = mx - (ox + vx * tt), dy = my - (oy + vy * tt);
+			const float dist = std::sqrt(dx * dx + dy * dy);
+			if (tt > 0.15f && dist < best) {
+				best = dist;
+				gizmo_hover = k;
+			}
+		}
+		if (!gizmo_visible || !hovered) {
+			gizmo_hover = -1;
+		}
+	}
+	if (g_ed.gizmo_axis >= 0) {
+		if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && gizmo_visible) {
+			Entity &e = g_ed.scene.entities[g_ed.selected];
+			const int k = g_ed.gizmo_axis;
+			const float vx = gizmo_end[k].x - gizmo_origin.x, vy = gizmo_end[k].y - gizmo_origin.y;
+			const float len2 = std::max(1.0f, vx * vx + vy * vy);
+			float amount = ((mx - g_ed.gizmo_start_mouse.x) * vx + (my - g_ed.gizmo_start_mouse.y) * vy) / len2 * gizmo_len;
+			float v = (k == 0 ? g_ed.gizmo_start_pos.x : (k == 1 ? g_ed.gizmo_start_pos.y : g_ed.gizmo_start_pos.z)) + amount;
+			if (io.KeyCtrl) {
+				v = std::round(v * 2.0f) / 2.0f;
+			}
+			float &target = k == 0 ? e.x : (k == 1 ? e.y : e.z);
+			if (target != v) {
+				target = v;
+				g_ed.dirty = true;
+			}
+		} else {
+			g_ed.gizmo_axis = -1;
+		}
+	}
+
 	// Selection and dragging (after rendering so the ID buffer is up to date).
-	if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+	if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && gizmo_hover >= 0) {
+		const Entity &e = g_ed.scene.entities[g_ed.selected];
+		g_ed.gizmo_axis = gizmo_hover;
+		g_ed.gizmo_start_pos = Vec3(e.x, e.y, e.z);
+		g_ed.gizmo_start_mouse = ImVec2(mx, my);
+	} else if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
 		const uint32_t id = g_r3d.pick((int)mx, (int)my);
 		const int prev = g_ed.selected;
 		g_ed.selected = id ? (int)id - 1 : -1;
@@ -572,10 +663,32 @@ static void draw_viewport_3d(App &p_app, float p_width) {
 	g_view_tex = p_app.renderer.update_texture(g_view_tex, g_r3d.get_pixels(), g_r3d.get_width(), g_r3d.get_height());
 	ImDrawList *dl = ImGui::GetWindowDrawList();
 	dl->AddImage(ImTextureRef(g_view_tex), pos, ImVec2(pos.x + w, pos.y + h));
+	if (gizmo_visible) {
+		const ImU32 colors[3] = { IM_COL32(255, 90, 90, 255), IM_COL32(90, 230, 130, 255), IM_COL32(90, 140, 255, 255) };
+		const int active = g_ed.gizmo_axis >= 0 ? g_ed.gizmo_axis : gizmo_hover;
+		const ImVec2 o(pos.x + gizmo_origin.x, pos.y + gizmo_origin.y);
+		for (int k = 0; k < 3; k++) {
+			const ImVec2 e(pos.x + gizmo_end[k].x, pos.y + gizmo_end[k].y);
+			const ImU32 c = k == active ? IM_COL32(255, 220, 90, 255) : colors[k];
+			const float th = (k == active ? 4.0f : 3.0f) * s;
+			float dx = e.x - o.x, dy = e.y - o.y;
+			const float len = std::sqrt(dx * dx + dy * dy);
+			if (len < 2.0f) {
+				continue;
+			}
+			dx /= len;
+			dy /= len;
+			const float head = 12.0f * s;
+			const ImVec2 base(e.x - dx * head, e.y - dy * head);
+			dl->AddLine(o, base, c, th);
+			dl->AddTriangleFilled(e, ImVec2(base.x - dy * head * 0.45f, base.y + dx * head * 0.45f), ImVec2(base.x + dy * head * 0.45f, base.y - dx * head * 0.45f), c);
+		}
+		dl->AddCircleFilled(o, 4.5f * s, IM_COL32(255, 255, 255, 230));
+	}
 
 	// Overlay: help and view options.
 	char info[200];
-	snprintf(info, sizeof(info), "%zu triángulos   ·   Clic: seleccionar   ·   Arrastrar: mover (Mayús: altura, Ctrl: ajustar)   ·   Botón dcho: girar   ·   Rueda: zoom   ·   F: enfocar", g_r3d.get_triangle_count());
+	snprintf(info, sizeof(info), "%zu triángulos   ·   Clic: seleccionar   ·   Flechas o arrastrar: mover (Mayús: altura, Ctrl: ajustar)   ·   Botón dcho: girar   ·   Rueda: zoom   ·   F: enfocar", g_r3d.get_triangle_count());
 	dl->AddText(ImVec2(pos.x + 11 * s, pos.y + size.y - 27 * s), IM_COL32(0, 0, 0, 120), info);
 	dl->AddText(ImVec2(pos.x + 10 * s, pos.y + size.y - 28 * s), IM_COL32(255, 255, 255, 200), info);
 	ImGui::SetCursorScreenPos(ImVec2(pos.x + 10 * s, pos.y + 10 * s));
@@ -1173,6 +1286,12 @@ void draw_editor(App &p_app) {
 	}
 	if (io.KeyCtrl && !io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_Y, true)) {
 		redo();
+	}
+	if (io.KeyCtrl && !io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_C, false)) {
+		copy_selected();
+	}
+	if (io.KeyCtrl && !io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_V, false)) {
+		paste_clipboard();
 	}
 	if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D, false)) {
 		duplicate_selected();
