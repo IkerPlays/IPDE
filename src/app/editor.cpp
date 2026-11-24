@@ -13,6 +13,7 @@
 #include <imgui_internal.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstring>
 
@@ -726,10 +727,43 @@ static void draw_scene_panel(App &p_app, float p_width) {
 		ImGui::EndPopup();
 	}
 	ImGui::Spacing();
+	static char filter[64] = "";
+	ImGui::SetNextItemWidth(-1);
+	ImGui::InputTextWithHint("##filter", "Buscar objetos...", filter, sizeof(filter));
+	std::string lfilter = filter;
+	std::transform(lfilter.begin(), lfilter.end(), lfilter.begin(), ::tolower);
+	int move_from = -1, move_to = -1;
 	ImGui::BeginChild("EntityList", ImVec2(0, -48 * s), ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground);
 	for (int i = 0; i < (int)g_ed.scene.entities.size(); i++) {
-		const Entity &e = g_ed.scene.entities[i];
+		Entity &e = g_ed.scene.entities[i];
+		if (!lfilter.empty()) {
+			std::string lname = e.name;
+			std::transform(lname.begin(), lname.end(), lname.begin(), ::tolower);
+			if (lname.find(lfilter) == std::string::npos) {
+				continue;
+			}
+		}
 		ImGui::PushID(i);
+		// Visibility toggle (filled dot = visible).
+		const ImVec2 dot_pos = ImGui::GetCursorScreenPos();
+		const float dot = ImGui::GetFrameHeight() * 0.7f;
+		if (ImGui::InvisibleButton("vis", ImVec2(dot, ImGui::GetTextLineHeight()))) {
+			e.visible = !e.visible;
+			g_ed.dirty = true;
+		}
+		if (ImGui::IsItemHovered()) {
+			ImGui::SetTooltip(e.visible ? "Ocultar" : "Mostrar");
+		}
+		{
+			const ImVec2 c(dot_pos.x + dot * 0.45f, dot_pos.y + ImGui::GetTextLineHeight() * 0.5f);
+			ImDrawList *dl = ImGui::GetWindowDrawList();
+			if (e.visible) {
+				dl->AddCircleFilled(c, 4.0f * s, theme::ACCENT);
+			} else {
+				dl->AddCircle(c, 4.0f * s, theme::TEXT_DIM, 0, 1.5f);
+			}
+		}
+		ImGui::SameLine(0, 2 * s);
 		std::string prefix;
 		if (e.player) {
 			prefix = "[J] ";
@@ -762,12 +796,46 @@ static void draw_scene_panel(App &p_app, float p_width) {
 		if (!e.visible) {
 			ImGui::PopStyleColor();
 		}
+		if (ImGui::BeginPopupContextItem("ctx")) {
+			g_ed.selected = i;
+			if (ImGui::MenuItem("Enfocar", "F")) {
+				focus_selected();
+			}
+			if (ImGui::MenuItem("Duplicar", "Ctrl+D")) {
+				duplicate_selected();
+			}
+			if (ImGui::MenuItem("Copiar", "Ctrl+C")) {
+				copy_selected();
+			}
+			ImGui::Separator();
+			if (ImGui::MenuItem("Subir", nullptr, false, i > 0)) {
+				move_from = i;
+				move_to = i - 1;
+			}
+			if (ImGui::MenuItem("Bajar", nullptr, false, i + 1 < (int)g_ed.scene.entities.size())) {
+				move_from = i;
+				move_to = i + 1;
+			}
+			ImGui::Separator();
+			if (ImGui::MenuItem("Eliminar", "Supr")) {
+				delete_selected();
+				ImGui::EndPopup();
+				ImGui::PopID();
+				break;
+			}
+			ImGui::EndPopup();
+		}
 		const char *type_name = entity_type_name(e.type);
 		ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - ImGui::CalcTextSize(type_name).x);
 		ImGui::TextDisabled("%s", type_name);
 		ImGui::PopID();
 	}
 	ImGui::EndChild();
+	if (move_from >= 0) {
+		std::swap(g_ed.scene.entities[move_from], g_ed.scene.entities[move_to]);
+		g_ed.selected = move_to;
+		g_ed.dirty = true;
+	}
 	ImGui::Separator();
 	ImGui::BeginDisabled(g_ed.selected < 0);
 	if (ImGui::Button("Duplicar", ImVec2((ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f, 0))) {
